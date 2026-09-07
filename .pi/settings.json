@@ -1,9 +1,13 @@
 {
   "packages": [
     {
-      "source": "git:github.com/HazAT/pi-interactive-subagents",
+      "source": "git:github.com/DDtoma/pi-interactive-subagents",
       "extensions": [],
       "skills": []
+    },
+    {
+      "source": "npm:@ssk_dev/pi-subagents-lean",
+      "extensions": []
     }
   ],
   "extensions": [

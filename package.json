@@ -9,7 +9,7 @@
   "author": "HazAT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/HazAT/pi-interactive-subagents"
+    "url": "https://github.com/DDtoma/pi-interactive-subagents"
   },
   "type": "module",
   "scripts": {

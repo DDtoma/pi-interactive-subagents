@@ -2,7 +2,7 @@
 
 Async subagents for [pi](https://github.com/badlogic/pi-mono) — spawn, orchestrate, and manage sub-agent sessions in multiplexer panes. **Fully non-blocking** — the main agent keeps working while subagents run in the background.
 
-https://github.com/user-attachments/assets/30adb156-cfb4-4c47-84ca-dd4aa80cba9f
+<https://github.com/user-attachments/assets/30adb156-cfb4-4c47-84ca-dd4aa80cba9f>
 
 ## How It Works
 
@@ -26,7 +26,7 @@ subagent({ name: "Scout: DB", agent: "scout", task: "Map database schema" });
 ## Install
 
 ```bash
-pi install git:github.com/HazAT/pi-interactive-subagents
+pi install git:github.com/DDtoma/pi-interactive-subagents
 ```
 
 Supported multiplexers:
@@ -203,15 +203,18 @@ This is a turn-level interrupt, not a method for forcibly terminating a subagent
 The `caller_ping` tool lets a subagent request help from its parent agent. When called, the child session **exits** and the parent receives a notification with the help message. The parent can then **resume** the child session with a response using `subagent_resume`.
 
 **`caller_ping` parameters:**
+
 - `message` (required): What you need help with
 
 **`subagent_resume` parameters:**
+
 - `sessionPath` (required): Path to the child session `.jsonl` file
 - `name` (optional): Display name for the resumed pane (defaults to `Resume`)
 - `message` (optional): Follow-up prompt to send after resuming
 - `autoExit` (optional): Whether the resumed session should auto-exit after its next response. Defaults to `true` for autonomous follow-up work; set `false` when resuming for an interactive handoff.
 
 **Interaction flow:**
+
 1. Child calls `caller_ping({ message: "Not sure which schema to use" })`
 2. Child session exits (like `subagent_done`)
 3. Parent receives a steer notification: *"Sub-agent Worker needs help: Not sure which schema to use"*
@@ -219,6 +222,7 @@ The `caller_ping` tool lets a subagent request help from its parent agent. When 
 5. Child picks up where it left off with the parent's guidance
 
 **Example:**
+
 ```typescript
 // Inside a worker subagent
 await caller_ping({
@@ -410,7 +414,7 @@ deny-tools: subagent
 
 | Agent      | `spawning`  | Rationale                                    |
 | ---------- | ----------- | -------------------------------------------- |
-| planner    | _(default)_ | Legitimately spawns scouts for investigation |
+| planner    | *(default)* | Legitimately spawns scouts for investigation |
 | worker     | `false`     | Should implement tasks, not delegate         |
 | researcher | `false`     | Should research, not spawn                   |
 | reviewer   | `false`     | Should review, not spawn                     |

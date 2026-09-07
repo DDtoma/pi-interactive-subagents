@@ -21,6 +21,7 @@ If the user provided a version, use it. Otherwise ask:
 > What version? (current is X.Y.Z — patch/minor/major, or exact version)
 
 Resolve semver:
+
 - `patch` → X.Y.(Z+1)
 - `minor` → X.(Y+1).0
 - `major` → (X+1).0.0
@@ -41,7 +42,7 @@ git log --pretty=format:"- %s" --no-merges
 Group commits by type using conventional commit prefixes:
 
 | Prefix | Section |
-|--------|---------|
+| -------- | --------- |
 | `feat` | ✨ Features |
 | `fix` | 🐛 Bug Fixes |
 | `refactor` | ♻️ Refactoring |
@@ -57,13 +58,13 @@ Format as markdown. Omit empty sections. Strip the `type(scope):` prefix from ea
 Install:
 
 ```bash
-pi install git:github.com/HazAT/pi-interactive-subagents@v<VERSION>
+pi install git:github.com/DDtoma/pi-interactive-subagents@v<VERSION>
 ```
 
 Or latest:
 
 ```bash
-pi install git:github.com/HazAT/pi-interactive-subagents
+pi install git:github.com/DDtoma/pi-interactive-subagents
 ```
 ````
 
