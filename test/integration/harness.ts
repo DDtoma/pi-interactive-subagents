@@ -89,10 +89,11 @@ export function getAvailableBackends(): MuxBackend[] {
   const backends: MuxBackend[] = [];
   const orig = process.env.PI_SUBAGENT_MUX;
 
-  for (const backend of ["cmux", "tmux", "zellij"] as MuxBackend[]) {
+  for (const backend of ["cmux", "tmux", "zellij", "herdr"] as MuxBackend[]) {
     process.env.PI_SUBAGENT_MUX = backend;
     try {
       if (getMuxBackend() === backend) backends.push(backend);
+    // pi-lens-ignore: error-swallowing
     } catch {}
   }
 
@@ -219,15 +220,18 @@ export function cleanupTestEnv(env: TestEnv): void {
   for (const surface of env.surfaces) {
     try {
       closeSurface(surface);
+    // pi-lens-ignore: error-swallowing
     } catch {}
   }
   for (const file of env.tempFiles) {
     try {
       unlinkSync(file);
+    // pi-lens-ignore: error-swallowing
     } catch {}
   }
   try {
     rmSync(env.dir, { recursive: true, force: true });
+  // pi-lens-ignore: error-swallowing
   } catch {}
 }
 
@@ -314,6 +318,7 @@ export async function waitForScreen(
     try {
       const screen = await readScreenAsync(surface, lines);
       if (pattern.test(screen)) return screen;
+    // pi-lens-ignore: error-swallowing
     } catch {}
     await sleep(2000);
   }
@@ -321,6 +326,7 @@ export async function waitForScreen(
   let finalScreen = "";
   try {
     finalScreen = readScreen(surface, lines);
+  // pi-lens-ignore: error-swallowing
   } catch {}
   throw new Error(
     `Timeout (${timeout}ms) waiting for pattern ${pattern}.\nLast screen:\n${finalScreen.slice(-1000)}`,

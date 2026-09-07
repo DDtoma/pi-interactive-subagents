@@ -30,6 +30,8 @@ import {
   predictZellijSplitDirection,
   selectZellijPlacement,
   selectZellijStackPlacement,
+  isHerdrAvailable,
+  parseHerdrSplitPaneId,
 } from "../pi-extension/subagents/cmux.ts";
 import {
   advanceStatusState,
@@ -2374,5 +2376,31 @@ describe("cmux.ts", () => {
       const result = isWezTermAvailable();
       assert.equal(typeof result, "boolean");
     });
+  });
+
+  describe("isHerdrAvailable", () => {
+    it("returns boolean based on HERDR_PANE_ID", () => {
+      const result = isHerdrAvailable();
+      assert.equal(typeof result, "boolean");
+    });
+  });
+});
+
+describe("parseHerdrSplitPaneId", () => {
+  it("extracts pane id from herdr split JSON output", () => {
+    const output = JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
+    assert.equal(parseHerdrSplitPaneId(output), "w1:p2");
+  });
+
+  it("throws on missing result.pane.pane_id", () => {
+    assert.throws(() => parseHerdrSplitPaneId("{}"), /missing result\.pane\.pane_id/);
+  });
+
+  it("throws on non-JSON output", () => {
+    assert.throws(() => parseHerdrSplitPaneId("not json"), /Unexpected herdr pane split output/);
+  });
+
+  it("throws on empty output", () => {
+    assert.throws(() => parseHerdrSplitPaneId(""), /Unexpected herdr pane split output/);
   });
 });

@@ -5,7 +5,7 @@ description: >
   which clarifies WHAT to build and figures out HOW, with the ability to
   spawn its own scouts/researchers mid-session. Use when asked to "plan",
   "brainstorm", "I want to build X", or "let's design". Requires the
-  subagents extension and a supported multiplexer (cmux/tmux/zellij).
+  subagents extension and a supported multiplexer (cmux/tmux/zellij/herdr).
 ---
 
 # Plan
@@ -108,6 +108,7 @@ When done, the user presses Ctrl+D and the plan + todos are returned to the main
 ### The planner may spawn its own specialists
 
 During the session, the planner can spawn:
+
 - **`scout`** — when a design decision depends on existing code it hasn't read
 - **`researcher`** — when a decision depends on external facts (library tradeoffs, best practices, API behaviors)
 
