@@ -1,6 +1,18 @@
-import { execSync, execFile, execFileSync, spawnSync } from "node:child_process";
+import {
+  execSync,
+  execFile,
+  execFileSync,
+  spawnSync,
+} from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
@@ -43,7 +55,14 @@ function hasCommand(command: string): boolean {
 
 function muxPreference(): MuxBackend | null {
   const pref = (process.env.PI_SUBAGENT_MUX ?? "").trim().toLowerCase();
-  if (pref === "cmux" || pref === "tmux" || pref === "zellij" || pref === "wezterm" || pref === "herdr") return pref;
+  if (
+    pref === "cmux" ||
+    pref === "tmux" ||
+    pref === "zellij" ||
+    pref === "wezterm" ||
+    pref === "herdr"
+  )
+    return pref;
   return null;
 }
 
@@ -56,7 +75,10 @@ function isTmuxRuntimeAvailable(): boolean {
 }
 
 function isZellijRuntimeAvailable(): boolean {
-  return !!(process.env.ZELLIJ || process.env.ZELLIJ_SESSION_NAME) && hasCommand("zellij");
+  return (
+    !!(process.env.ZELLIJ || process.env.ZELLIJ_SESSION_NAME) &&
+    hasCommand("zellij")
+  );
 }
 
 function isWezTermRuntimeAvailable(): boolean {
@@ -131,7 +153,9 @@ export function muxSetupHint(): string {
 function requireMuxBackend(): MuxBackend {
   const backend = getMuxBackend();
   if (!backend) {
-    throw new Error(`No supported terminal multiplexer found. ${muxSetupHint()}`);
+    throw new Error(
+      `No supported terminal multiplexer found. ${muxSetupHint()}`,
+    );
   }
   return backend;
 }
@@ -194,8 +218,15 @@ function zellijActionArgs(args: string[], surface?: string): string[] {
   const action = args[0];
   if (!ZELLIJ_PANE_SCOPED_ACTIONS.has(action)) return ["action", ...args];
   // Don't double-add if caller already specified it.
-  if (args.includes("--pane-id") || args.includes("-p")) return ["action", ...args];
-  return ["action", action, "--pane-id", zellijPaneId(surface), ...args.slice(1)];
+  if (args.includes("--pane-id") || args.includes("-p"))
+    return ["action", ...args];
+  return [
+    "action",
+    action,
+    "--pane-id",
+    zellijPaneId(surface),
+    ...args.slice(1),
+  ];
 }
 
 function zellijActionSync(args: string[], surface?: string): string {
@@ -205,11 +236,18 @@ function zellijActionSync(args: string[], surface?: string): string {
   });
 }
 
-async function zellijActionAsync(args: string[], surface?: string): Promise<string> {
-  const { stdout } = await execFileAsync("zellij", zellijActionArgs(args, surface), {
-    encoding: "utf8",
-    env: zellijEnv(surface),
-  });
+async function zellijActionAsync(
+  args: string[],
+  surface?: string,
+): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "zellij",
+    zellijActionArgs(args, surface),
+    {
+      encoding: "utf8",
+      env: zellijEnv(surface),
+    },
+  );
   return stdout;
 }
 
@@ -249,7 +287,12 @@ export type ZellijPlacementPlan =
       tabId: number;
       splitDirection: ZellijSplitDirection;
     }
-  | { mode: "stack"; anchorPaneId: number; targetPaneId: number; tabId: number };
+  | {
+      mode: "stack";
+      anchorPaneId: number;
+      targetPaneId: number;
+      tabId: number;
+    };
 
 function paneArea(pane: ZellijPaneSnapshot): number {
   return (pane.pane_rows ?? 0) * (pane.pane_columns ?? 0);
@@ -266,10 +309,13 @@ function isUsableZellijTiledPane(pane: ZellijPaneSnapshot): boolean {
   );
 }
 
-export function predictZellijSplitDirection(pane: ZellijPaneSnapshot): ZellijSplitDirection | null {
+export function predictZellijSplitDirection(
+  pane: ZellijPaneSnapshot,
+): ZellijSplitDirection | null {
   const columns = pane.pane_columns ?? 0;
   const rows = pane.pane_rows ?? 0;
-  if (columns < ZELLIJ_MIN_TERMINAL_WIDTH || rows < ZELLIJ_MIN_TERMINAL_HEIGHT) return null;
+  if (columns < ZELLIJ_MIN_TERMINAL_WIDTH || rows < ZELLIJ_MIN_TERMINAL_HEIGHT)
+    return null;
 
   if (
     rows * ZELLIJ_CURSOR_HEIGHT_WIDTH_RATIO > columns &&
@@ -306,7 +352,9 @@ function zellijTabPanesForParent(
   panes: ZellijPaneSnapshot[],
   parentPaneId: number,
 ): { parentPane: ZellijPaneSnapshot; tabPanes: ZellijPaneSnapshot[] } | null {
-  const parentPane = panes.find((pane) => !pane.is_plugin && pane.id === parentPaneId);
+  const parentPane = panes.find(
+    (pane) => !pane.is_plugin && pane.id === parentPaneId,
+  );
   if (!parentPane || typeof parentPane.tab_id !== "number") return null;
 
   const tabPanes = panes
@@ -346,11 +394,23 @@ export function selectZellijPlacement(
   if (!tabInfo) return null;
 
   const zellijSplitCandidates = tabInfo.tabPanes
-    .map((pane) => ({ pane, splitDirection: predictZellijSplitDirection(pane) }))
+    .map((pane) => ({
+      pane,
+      splitDirection: predictZellijSplitDirection(pane),
+    }))
     .filter(
-      (candidate): candidate is { pane: ZellijPaneSnapshot; splitDirection: ZellijSplitDirection } =>
+      (
+        candidate,
+      ): candidate is {
+        pane: ZellijPaneSnapshot;
+        splitDirection: ZellijSplitDirection;
+      } =>
         candidate.splitDirection !== null &&
-        canSplitZellijPane(candidate.pane, ZELLIJ_MIN_TERMINAL_WIDTH, ZELLIJ_MIN_TERMINAL_HEIGHT),
+        canSplitZellijPane(
+          candidate.pane,
+          ZELLIJ_MIN_TERMINAL_WIDTH,
+          ZELLIJ_MIN_TERMINAL_HEIGHT,
+        ),
     );
 
   const safeSplitCandidates = zellijSplitCandidates.filter((candidate) =>
@@ -363,7 +423,9 @@ export function selectZellijPlacement(
     zellijSplitCandidates.length > 0 &&
     safeSplitCandidates.length === zellijSplitCandidates.length
   ) {
-    const splitTarget = safeSplitCandidates.sort((a, b) => paneArea(b.pane) - paneArea(a.pane))[0];
+    const splitTarget = safeSplitCandidates.sort(
+      (a, b) => paneArea(b.pane) - paneArea(a.pane),
+    )[0];
     return {
       mode: "split",
       anchorPaneId: splitTarget.pane.id,
@@ -379,7 +441,9 @@ export function selectZellijPlacement(
 function parseZellijPaneSurface(rawId: string, context: string): string {
   const idMatch = rawId.match(/(\d+)/);
   if (!idMatch) {
-    throw new Error(`Unexpected zellij pane id from ${context}: ${rawId || "(empty)"}`);
+    throw new Error(
+      `Unexpected zellij pane id from ${context}: ${rawId || "(empty)"}`,
+    );
   }
   return `pane:${idMatch[1]}`;
 }
@@ -388,7 +452,13 @@ function readZellijPanes(): ZellijPaneSnapshot[] {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const output = zellijActionSync(["list-panes", "--json", "--geometry", "--state", "--tab"]);
+      const output = zellijActionSync([
+        "list-panes",
+        "--json",
+        "--geometry",
+        "--state",
+        "--tab",
+      ]);
       if (!output.trim()) {
         throw new Error("Unexpected zellij list-panes output: empty");
       }
@@ -406,7 +476,15 @@ function readZellijPanes(): ZellijPaneSnapshot[] {
 }
 
 function createZellijTiledPane(name: string, tabId: number): string {
-  const args = ["new-pane", "--tab-id", String(tabId), "--name", name, "--cwd", process.cwd()];
+  const args = [
+    "new-pane",
+    "--tab-id",
+    String(tabId),
+    "--name",
+    name,
+    "--cwd",
+    process.cwd(),
+  ];
   return parseZellijPaneSurface(zellijActionSync(args).trim(), "new-pane");
 }
 
@@ -420,14 +498,25 @@ function createZellijStackedPane(name: string, anchorSurface: string): string {
     "--cwd",
     process.cwd(),
   ];
-  return parseZellijPaneSurface(zellijActionSync(args, anchorSurface).trim(), "new-pane --stacked");
+  return parseZellijPaneSurface(
+    zellijActionSync(args, anchorSurface).trim(),
+    "new-pane --stacked",
+  );
 }
 
 function createZellijTab(name: string): string {
-  const tabIdRaw = zellijActionSync(["new-tab", "--name", name, "--cwd", process.cwd()]).trim();
+  const tabIdRaw = zellijActionSync([
+    "new-tab",
+    "--name",
+    name,
+    "--cwd",
+    process.cwd(),
+  ]).trim();
   const tabId = Number(tabIdRaw);
   if (!Number.isInteger(tabId)) {
-    throw new Error(`Unexpected zellij tab id from new-tab: ${tabIdRaw || "(empty)"}`);
+    throw new Error(
+      `Unexpected zellij tab id from new-tab: ${tabIdRaw || "(empty)"}`,
+    );
   }
 
   try {
@@ -469,10 +558,11 @@ function sleepSync(milliseconds: number): void {
 }
 
 function zellijSurfaceLockPath(): string {
-  const session = (process.env.ZELLIJ_SESSION_NAME ?? process.env.ZELLIJ ?? "default").replace(
-    /[^A-Za-z0-9_.-]/g,
-    "_",
-  );
+  const session = (
+    process.env.ZELLIJ_SESSION_NAME ??
+    process.env.ZELLIJ ??
+    "default"
+  ).replace(/[^A-Za-z0-9_.-]/g, "_");
   return join(tmpdir(), `pi-zellij-surface-${session}.lock`);
 }
 
@@ -497,7 +587,9 @@ function withZellijSurfaceLock<T>(callback: () => T): T {
       } catch {}
 
       if (Date.now() > deadline) {
-        throw new Error(`Timed out waiting for zellij surface lock: ${lockPath}`);
+        throw new Error(
+          `Timed out waiting for zellij surface lock: ${lockPath}`,
+        );
       }
       sleepSync(50);
     }
@@ -523,7 +615,12 @@ function createZellijSurfaceUnlocked(name: string): string {
   );
 
   const plan = Number.isInteger(parentPaneId)
-    ? selectZellijPlacement(readZellijPanes(), parentPaneId, minColumns, minRows)
+    ? selectZellijPlacement(
+        readZellijPanes(),
+        parentPaneId,
+        minColumns,
+        minRows,
+      )
     : null;
 
   if (plan?.mode === "split") {
@@ -549,9 +646,12 @@ export function parseHerdrSplitPaneId(output: string): string {
     throw new Error(`Unexpected herdr pane split output: ${output}`);
   }
 
-  const paneId = (parsed as { result?: { pane?: { pane_id?: unknown } } })?.result?.pane?.pane_id;
+  const paneId = (parsed as { result?: { pane?: { pane_id?: unknown } } })
+    ?.result?.pane?.pane_id;
   if (typeof paneId !== "string" || !paneId) {
-    throw new Error(`Unexpected herdr pane split output: missing result.pane.pane_id in ${output}`);
+    throw new Error(
+      `Unexpected herdr pane split output: missing result.pane.pane_id in ${output}`,
+    );
   }
   return paneId;
 }
@@ -562,7 +662,8 @@ function createHerdrSplitSurface(
   fromSurface?: string,
 ): string {
   // herdr only supports right/down splits; map left→right, up→down (same as zellij).
-  const directionArg = direction === "left" || direction === "right" ? "right" : "down";
+  const directionArg =
+    direction === "left" || direction === "right" ? "right" : "down";
   const args = [
     "pane",
     "split",
@@ -582,14 +683,25 @@ function createHerdrSplitSurface(
     // Anchor pane is gone — fall back to splitting the current pane.
     output = execFileSync(
       "herdr",
-      ["pane", "split", "--current", "--direction", directionArg, "--cwd", process.cwd(), "--no-focus"],
+      [
+        "pane",
+        "split",
+        "--current",
+        "--direction",
+        directionArg,
+        "--cwd",
+        process.cwd(),
+        "--no-focus",
+      ],
       { encoding: "utf8" },
     ).trim();
   }
 
   const surface = parseHerdrSplitPaneId(output);
   try {
-    execFileSync("herdr", ["pane", "rename", surface, name], { encoding: "utf8" });
+    execFileSync("herdr", ["pane", "rename", surface, name], {
+      encoding: "utf8",
+    });
   } catch {
     // Optional — pane name is cosmetic.
   }
@@ -615,14 +727,18 @@ function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-export function parseCmuxFocusedSnapshot(value: unknown): CmuxFocusSnapshot | null {
+export function parseCmuxFocusedSnapshot(
+  value: unknown,
+): CmuxFocusSnapshot | null {
   if (!value || typeof value !== "object") return null;
 
   const focused = (value as { focused?: unknown }).focused;
   if (!focused || typeof focused !== "object") return null;
 
   const record = focused as { surface_ref?: unknown; pane_ref?: unknown };
-  const surfaceRef = nonEmptyString(record.surface_ref) ? record.surface_ref : undefined;
+  const surfaceRef = nonEmptyString(record.surface_ref)
+    ? record.surface_ref
+    : undefined;
   const paneRef = nonEmptyString(record.pane_ref) ? record.pane_ref : undefined;
 
   if (!surfaceRef && !paneRef) return null;
@@ -638,7 +754,9 @@ export function parseCmuxJson(value: string): unknown | null {
   }
 }
 
-export function parseCmuxFocusedSnapshotFromJson(value: string): CmuxFocusSnapshot | null {
+export function parseCmuxFocusedSnapshotFromJson(
+  value: string,
+): CmuxFocusSnapshot | null {
   return parseCmuxFocusedSnapshot(parseCmuxJson(value));
 }
 
@@ -649,31 +767,47 @@ function parseCmuxCallerSnapshot(value: unknown): CmuxFocusSnapshot | null {
   if (!caller || typeof caller !== "object") return null;
 
   const record = caller as { surface_ref?: unknown; pane_ref?: unknown };
-  const surfaceRef = nonEmptyString(record.surface_ref) ? record.surface_ref : undefined;
+  const surfaceRef = nonEmptyString(record.surface_ref)
+    ? record.surface_ref
+    : undefined;
   const paneRef = nonEmptyString(record.pane_ref) ? record.pane_ref : undefined;
 
   if (!surfaceRef && !paneRef) return null;
   return { surfaceRef, paneRef };
 }
 
-export function parseCmuxPaneRefForSurface(value: unknown, surface: string): string | null {
+export function parseCmuxPaneRefForSurface(
+  value: unknown,
+  surface: string,
+): string | null {
   if (!value || typeof value !== "object") return null;
 
-  const record = value as { surface_ref?: unknown; pane_ref?: unknown; caller?: unknown };
-  if (record.surface_ref === surface && nonEmptyString(record.pane_ref)) return record.pane_ref;
+  const record = value as {
+    surface_ref?: unknown;
+    pane_ref?: unknown;
+    caller?: unknown;
+  };
+  if (record.surface_ref === surface && nonEmptyString(record.pane_ref))
+    return record.pane_ref;
 
   const caller = record.caller;
   if (!caller || typeof caller !== "object") return null;
 
   const callerRecord = caller as { surface_ref?: unknown; pane_ref?: unknown };
-  if (callerRecord.surface_ref === surface && nonEmptyString(callerRecord.pane_ref)) {
+  if (
+    callerRecord.surface_ref === surface &&
+    nonEmptyString(callerRecord.pane_ref)
+  ) {
     return callerRecord.pane_ref;
   }
 
   return null;
 }
 
-export function parseCmuxPaneRefForSurfaceFromJson(value: string, surface: string): string | null {
+export function parseCmuxPaneRefForSurfaceFromJson(
+  value: string,
+  surface: string,
+): string | null {
   return parseCmuxPaneRefForSurface(parseCmuxJson(value), surface);
 }
 
@@ -708,11 +842,15 @@ function restoreCmuxFocusSnapshot(snapshot: CmuxFocusSnapshot | null): void {
   if (!snapshot) return;
 
   if (snapshot.paneRef) {
-    spawnSync("cmux", ["focus-pane", "--pane", snapshot.paneRef], { encoding: "utf8" });
+    spawnSync("cmux", ["focus-pane", "--pane", snapshot.paneRef], {
+      encoding: "utf8",
+    });
   }
 
   if (snapshot.surfaceRef) {
-    spawnSync("cmux", ["focus-panel", "--panel", snapshot.surfaceRef], { encoding: "utf8" });
+    spawnSync("cmux", ["focus-panel", "--panel", snapshot.surfaceRef], {
+      encoding: "utf8",
+    });
   }
 }
 
@@ -746,7 +884,10 @@ function cmuxFocusMatchesPaneRef(
 function restoreCmuxFocusIfLaunchSurfaceFocused(
   snapshot: CmuxFocusSnapshot | null,
   child: CmuxCreatedSurface,
-  options?: { sourceSurfaceRef?: string; callerSnapshot?: CmuxFocusSnapshot | null },
+  options?: {
+    sourceSurfaceRef?: string;
+    callerSnapshot?: CmuxFocusSnapshot | null;
+  },
 ): void {
   if (!snapshot) return;
 
@@ -755,7 +896,10 @@ function restoreCmuxFocusIfLaunchSurfaceFocused(
   if (
     cmuxFocusMatchesChild(currentFocus, child) ||
     cmuxFocusMatchesSurfaceRef(currentFocus, options?.sourceSurfaceRef) ||
-    cmuxFocusMatchesSurfaceRef(currentFocus, options?.callerSnapshot?.surfaceRef) ||
+    cmuxFocusMatchesSurfaceRef(
+      currentFocus,
+      options?.callerSnapshot?.surfaceRef,
+    ) ||
     // cmux can settle focus onto another active surface in the caller pane after creating a split/surface.
     cmuxFocusMatchesPaneRef(currentFocus, options?.callerSnapshot?.paneRef)
   ) {
@@ -763,7 +907,10 @@ function restoreCmuxFocusIfLaunchSurfaceFocused(
   }
 }
 
-function parseCmuxCreatedSurface(output: string, command: string): CmuxCreatedSurface {
+function parseCmuxCreatedSurface(
+  output: string,
+  command: string,
+): CmuxCreatedSurface {
   const surfaceMatch = output.match(/surface:\d+/);
   if (!surfaceMatch) {
     throw new Error(`Unexpected cmux ${command} output: ${output}`);
@@ -776,7 +923,9 @@ function parseCmuxCreatedSurface(output: string, command: string): CmuxCreatedSu
 }
 
 function renameCmuxSurface(surface: string, name: string): void {
-  execFileSync("cmux", ["rename-tab", "--surface", surface, name], { encoding: "utf8" });
+  execFileSync("cmux", ["rename-tab", "--surface", surface, name], {
+    encoding: "utf8",
+  });
 }
 
 function createCmuxSplitSurface(
@@ -830,14 +979,18 @@ export function createSurface(name: string): string {
       if (tree.includes(cmuxSubagentPane)) {
         return createSurfaceInPane(name, cmuxSubagentPane);
       }
-    // pi-lens-ignore: error-swallowing
+      // pi-lens-ignore: error-swallowing
     } catch {}
     // Pane is gone — fall through to create a new split
     cmuxSubagentPane = null;
   }
 
   if (backend === "cmux") {
-    const created = createCmuxSplitSurface(name, "right", process.env.CMUX_SURFACE_ID);
+    const created = createCmuxSplitSurface(
+      name,
+      "right",
+      process.env.CMUX_SURFACE_ID,
+    );
     cmuxSubagentPane = created.paneRef ?? null;
     return created.surface;
   }
@@ -866,7 +1019,9 @@ function createSurfaceInPane(name: string, pane: string): string {
   let child: CmuxCreatedSurface | null = null;
 
   try {
-    const output = execFileSync("cmux", ["new-surface", "--pane", pane], { encoding: "utf8" }).trim();
+    const output = execFileSync("cmux", ["new-surface", "--pane", pane], {
+      encoding: "utf8",
+    }).trim();
     child = parseCmuxCreatedSurface(output, "new-surface");
     child.paneRef ??= pane;
     renameCmuxSurface(child.surface, name);
@@ -932,12 +1087,18 @@ export function createSurfaceSplit(
     }
     const paneId = execFileSync("wezterm", args, { encoding: "utf8" }).trim();
     if (!paneId || !/^\d+$/.test(paneId)) {
-      throw new Error(`Unexpected wezterm split-pane output: ${paneId || "(empty)"}`);
+      throw new Error(
+        `Unexpected wezterm split-pane output: ${paneId || "(empty)"}`,
+      );
     }
     try {
-      execFileSync("wezterm", ["cli", "set-tab-title", "--pane-id", paneId, name], {
-        encoding: "utf8",
-      });
+      execFileSync(
+        "wezterm",
+        ["cli", "set-tab-title", "--pane-id", paneId, name],
+        {
+          encoding: "utf8",
+        },
+      );
     } catch {
       // Optional — tab title is cosmetic.
     }
@@ -949,8 +1110,17 @@ export function createSurfaceSplit(
   }
 
   // zellij
-  const directionArg = direction === "left" || direction === "right" ? "right" : "down";
-  const args = ["new-pane", "--direction", directionArg, "--name", name, "--cwd", process.cwd()];
+  const directionArg =
+    direction === "left" || direction === "right" ? "right" : "down";
+  const args = [
+    "new-pane",
+    "--direction",
+    directionArg,
+    "--name",
+    name,
+    "--cwd",
+    process.cwd(),
+  ];
 
   let rawId: string;
   try {
@@ -992,9 +1162,12 @@ export function renameCurrentTab(title: string): void {
     const surfaceId = process.env.CMUX_SURFACE_ID;
     if (!surfaceId) throw new Error("CMUX_SURFACE_ID not set");
     // pi-lens-ignore: ast-grep:unchecked-throwing-call
-    execSync(`cmux rename-tab --surface ${shellEscape(surfaceId)} ${shellEscape(title)}`, {
-      encoding: "utf8",
-    });
+    execSync(
+      `cmux rename-tab --surface ${shellEscape(surfaceId)} ${shellEscape(title)}`,
+      {
+        encoding: "utf8",
+      },
+    );
     return;
   }
 
@@ -1004,10 +1177,16 @@ export function renameCurrentTab(title: string): void {
     }
     const paneId = process.env.TMUX_PANE;
     if (!paneId) throw new Error("TMUX_PANE not set");
-    const windowId = execFileSync("tmux", ["display-message", "-p", "-t", paneId, "#{window_id}"], {
+    const windowId = execFileSync(
+      "tmux",
+      ["display-message", "-p", "-t", paneId, "#{window_id}"],
+      {
+        encoding: "utf8",
+      },
+    ).trim();
+    execFileSync("tmux", ["rename-window", "-t", windowId, title], {
       encoding: "utf8",
-    }).trim();
-    execFileSync("tmux", ["rename-window", "-t", windowId, title], { encoding: "utf8" });
+    });
     return;
   }
 
@@ -1024,7 +1203,9 @@ export function renameCurrentTab(title: string): void {
     // Rename the agent's own pane, not the user's tab (same rationale as zellij, #21).
     const herdrPaneId = process.env.HERDR_PANE_ID;
     if (!herdrPaneId) throw new Error("HERDR_PANE_ID not set");
-    execFileSync("herdr", ["pane", "rename", herdrPaneId, title], { encoding: "utf8" });
+    execFileSync("herdr", ["pane", "rename", herdrPaneId, title], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -1047,9 +1228,12 @@ export function renameWorkspace(title: string): void {
 
   if (backend === "cmux") {
     // pi-lens-ignore: ast-grep:unchecked-throwing-call
-    execSync(`cmux workspace-action --action rename --title ${shellEscape(title)}`, {
-      encoding: "utf8",
-    });
+    execSync(
+      `cmux workspace-action --action rename --title ${shellEscape(title)}`,
+      {
+        encoding: "utf8",
+      },
+    );
     return;
   }
 
@@ -1067,7 +1251,9 @@ export function renameWorkspace(title: string): void {
         encoding: "utf8",
       },
     ).trim();
-    execFileSync("tmux", ["rename-session", "-t", sessionId, title], { encoding: "utf8" });
+    execFileSync("tmux", ["rename-session", "-t", sessionId, title], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -1107,15 +1293,22 @@ export function sendCommand(surface: string, command: string): void {
 
   if (backend === "cmux") {
     // pi-lens-ignore: ast-grep:unchecked-throwing-call
-    execSync(`cmux send --surface ${shellEscape(surface)} ${shellEscape(command + "\n")}`, {
-      encoding: "utf8",
-    });
+    execSync(
+      `cmux send --surface ${shellEscape(surface)} ${shellEscape(command + "\n")}`,
+      {
+        encoding: "utf8",
+      },
+    );
     return;
   }
 
   if (backend === "tmux") {
-    execFileSync("tmux", ["send-keys", "-t", surface, "-l", command], { encoding: "utf8" });
-    execFileSync("tmux", ["send-keys", "-t", surface, "Enter"], { encoding: "utf8" });
+    execFileSync("tmux", ["send-keys", "-t", surface, "-l", command], {
+      encoding: "utf8",
+    });
+    execFileSync("tmux", ["send-keys", "-t", surface, "Enter"], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -1130,7 +1323,9 @@ export function sendCommand(surface: string, command: string): void {
 
   if (backend === "herdr") {
     // Atomic text + Enter, bracketed-paste aware.
-    execFileSync("herdr", ["pane", "run", surface, command], { encoding: "utf8" });
+    execFileSync("herdr", ["pane", "run", surface, command], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -1145,24 +1340,34 @@ export function sendEscape(surface: string): void {
   const backend = requireMuxBackend();
 
   if (backend === "cmux") {
-    execFileSync("cmux", ["send", "--surface", surface, "\u001b"], { encoding: "utf8" });
-    return;
-  }
-
-  if (backend === "tmux") {
-    execFileSync("tmux", ["send-keys", "-t", surface, "Escape"], { encoding: "utf8" });
-    return;
-  }
-
-  if (backend === "wezterm") {
-    execFileSync("wezterm", ["cli", "send-text", "--pane-id", surface, "--no-paste", "\u001b"], {
+    execFileSync("cmux", ["send", "--surface", surface, "\u001b"], {
       encoding: "utf8",
     });
     return;
   }
 
+  if (backend === "tmux") {
+    execFileSync("tmux", ["send-keys", "-t", surface, "Escape"], {
+      encoding: "utf8",
+    });
+    return;
+  }
+
+  if (backend === "wezterm") {
+    execFileSync(
+      "wezterm",
+      ["cli", "send-text", "--pane-id", surface, "--no-paste", "\u001b"],
+      {
+        encoding: "utf8",
+      },
+    );
+    return;
+  }
+
   if (backend === "herdr") {
-    execFileSync("herdr", ["pane", "send-keys", surface, "esc"], { encoding: "utf8" });
+    execFileSync("herdr", ["pane", "send-keys", surface, "esc"], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -1215,9 +1420,12 @@ export function readScreen(surface: string, lines = 50): string {
 
   if (backend === "cmux") {
     // pi-lens-ignore: ast-grep:unchecked-throwing-call
-    return execSync(`cmux read-screen --surface ${shellEscape(surface)} --lines ${lines}`, {
-      encoding: "utf8",
-    });
+    return execSync(
+      `cmux read-screen --surface ${shellEscape(surface)} --lines ${lines}`,
+      {
+        encoding: "utf8",
+      },
+    );
   }
 
   if (backend === "tmux") {
@@ -1263,7 +1471,10 @@ export function readScreen(surface: string, lines = 50): string {
 /**
  * Read the screen contents of a pane (async).
  */
-export async function readScreenAsync(surface: string, lines = 50): Promise<string> {
+export async function readScreenAsync(
+  surface: string,
+  lines = 50,
+): Promise<string> {
   const backend = requireMuxBackend();
 
   if (backend === "cmux") {

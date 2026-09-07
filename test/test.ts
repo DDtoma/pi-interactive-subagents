@@ -1,6 +1,12 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -142,7 +148,10 @@ function writeAgentFile(
   body = "You are a test agent.",
 ) {
   mkdirSync(agentsDir, { recursive: true });
-  writeFileSync(join(agentsDir, `${name}.md`), `---\n${frontmatter}\n---\n\n${body}\n`);
+  writeFileSync(
+    join(agentsDir, `${name}.md`),
+    `---\n${frontmatter}\n---\n\n${body}\n`,
+  );
 }
 
 async function withIsolatedAgentEnv(
@@ -233,7 +242,12 @@ describe("session.ts", () => {
 
   describe("getLeafId", () => {
     it("returns last entry id", () => {
-      const file = createSessionFile(dir, [SESSION_HEADER, MODEL_CHANGE, USER_MSG, ASSISTANT_MSG]);
+      const file = createSessionFile(dir, [
+        SESSION_HEADER,
+        MODEL_CHANGE,
+        USER_MSG,
+        ASSISTANT_MSG,
+      ]);
       assert.equal(getLeafId(file), "asst-001");
     });
 
@@ -246,7 +260,12 @@ describe("session.ts", () => {
 
   describe("getNewEntries", () => {
     it("returns entries after a given line", () => {
-      const file = createSessionFile(dir, [SESSION_HEADER, MODEL_CHANGE, USER_MSG, ASSISTANT_MSG]);
+      const file = createSessionFile(dir, [
+        SESSION_HEADER,
+        MODEL_CHANGE,
+        USER_MSG,
+        ASSISTANT_MSG,
+      ]);
       const entries = getNewEntries(file, 2);
       assert.equal(entries.length, 2);
       assert.equal(entries[0].id, "user-001");
@@ -347,7 +366,10 @@ describe("session.ts", () => {
           errorMessage: "stream interrupted",
         },
       };
-      assert.equal(findLastAssistantMessage([msg] as any[]), "Here is partial output.");
+      assert.equal(
+        findLastAssistantMessage([msg] as any[]),
+        "Here is partial output.",
+      );
     });
 
     it("does not invent a summary for a stop=error message with no errorMessage", () => {
@@ -365,8 +387,17 @@ describe("session.ts", () => {
 
   describe("appendBranchSummary", () => {
     it("appends valid branch_summary entry", () => {
-      const file = createSessionFile(dir, [SESSION_HEADER, USER_MSG, ASSISTANT_MSG]);
-      const id = appendBranchSummary(file, "user-001", "asst-001", "The plan was created.");
+      const file = createSessionFile(dir, [
+        SESSION_HEADER,
+        USER_MSG,
+        ASSISTANT_MSG,
+      ]);
+      const id = appendBranchSummary(
+        file,
+        "user-001",
+        "asst-001",
+        "The plan was created.",
+      );
 
       assert.ok(id, "should return an id");
       assert.equal(typeof id, "string");
@@ -409,7 +440,12 @@ describe("session.ts", () => {
 
   describe("seedSubagentSessionFile", () => {
     it("creates a lineage-only child session with parent linkage and no copied turns", () => {
-      const parentFile = createSessionFile(dir, [SESSION_HEADER, MODEL_CHANGE, USER_MSG, ASSISTANT_MSG]);
+      const parentFile = createSessionFile(dir, [
+        SESSION_HEADER,
+        MODEL_CHANGE,
+        USER_MSG,
+        ASSISTANT_MSG,
+      ]);
       const childFile = join(dir, "lineage-child.jsonl");
 
       seedSubagentSessionFile({
@@ -429,7 +465,12 @@ describe("session.ts", () => {
     });
 
     it("creates a forked child session with copied context before the triggering user turn", () => {
-      const parentFile = createSessionFile(dir, [SESSION_HEADER, MODEL_CHANGE, USER_MSG, ASSISTANT_MSG]);
+      const parentFile = createSessionFile(dir, [
+        SESSION_HEADER,
+        MODEL_CHANGE,
+        USER_MSG,
+        ASSISTANT_MSG,
+      ]);
       const childFile = join(dir, "fork-child.jsonl");
 
       seedSubagentSessionFile({
@@ -448,8 +489,17 @@ describe("session.ts", () => {
       assert.equal(entries[0].parentSession, parentFile);
       assert.equal(entries[0].cwd, "/tmp/fork-child-cwd");
       assert.equal(entries[1].type, "model_change");
-      assert.equal(entries.some((entry) => entry.type === "session" && entry.parentSession !== parentFile), false);
-      assert.equal(entries.some((entry) => entry.type === "message"), false);
+      assert.equal(
+        entries.some(
+          (entry) =>
+            entry.type === "session" && entry.parentSession !== parentFile,
+        ),
+        false,
+      );
+      assert.equal(
+        entries.some((entry) => entry.type === "message"),
+        false,
+      );
     });
   });
 
@@ -460,11 +510,14 @@ describe("session.ts", () => {
       const targetFile = join(dir, "merge-target.jsonl");
       writeFileSync(
         sourceFile,
-        [SESSION_HEADER, USER_MSG, ASSISTANT_MSG].map((e) => JSON.stringify(e)).join("\n") + "\n",
+        [SESSION_HEADER, USER_MSG, ASSISTANT_MSG]
+          .map((e) => JSON.stringify(e))
+          .join("\n") + "\n",
       );
       writeFileSync(
         targetFile,
-        [SESSION_HEADER, USER_MSG].map((e) => JSON.stringify(e)).join("\n") + "\n",
+        [SESSION_HEADER, USER_MSG].map((e) => JSON.stringify(e)).join("\n") +
+          "\n",
       );
 
       // Merge entries after line 2 (the shared base)
@@ -490,7 +543,9 @@ describe("status.ts", () => {
   });
 
   it("loads a valid config file", () => {
-    const examplePath = fileURLToPath(new URL("../config.json.example", import.meta.url));
+    const examplePath = fileURLToPath(
+      new URL("../config.json.example", import.meta.url),
+    );
     const config = loadStatusConfig(examplePath);
 
     assert.deepEqual(config, {
@@ -522,7 +577,10 @@ describe("status.ts", () => {
       /status\.enabled must be a boolean/,
     );
     assert.throws(
-      () => parseStatusConfig({ status: { enabled: true, defaultCadenceSeconds: 60 } }),
+      () =>
+        parseStatusConfig({
+          status: { enabled: true, defaultCadenceSeconds: 60 },
+        }),
       /status has unsupported key\(s\): defaultCadenceSeconds/,
     );
   });
@@ -530,7 +588,11 @@ describe("status.ts", () => {
   it("reports when neither local nor shared config exists", () => {
     withTempDir((dir) => {
       assert.throws(
-        () => loadStatusConfig(join(dir, "config.json"), join(dir, "config.json.example")),
+        () =>
+          loadStatusConfig(
+            join(dir, "config.json"),
+            join(dir, "config.json.example"),
+          ),
         /Missing subagent status config\. Expected .*config\.json.*or.*config\.json\.example/,
       );
     });
@@ -577,17 +639,21 @@ describe("status.ts", () => {
 
   it("classifies active snapshots without aging into stalled", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-      latestEvent: "tool_execution_start",
-    }, 5_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+        latestEvent: "tool_execution_start",
+      },
+      5_000,
+    );
 
     const snapshot = classifyStatus(state, 240_000);
     assert.equal(snapshot.kind, "active");
@@ -597,14 +663,18 @@ describe("status.ts", () => {
 
   it("classifies waiting snapshots as healthy idle without becoming stalled", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 10_000,
-      sequence: 1,
-      phase: "waiting",
-      waitingSince: 10_000,
-      latestEvent: "agent_end",
-    }, 10_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 10_000,
+        sequence: 1,
+        phase: "waiting",
+        waitingSince: 10_000,
+        latestEvent: "agent_end",
+      },
+      10_000,
+    );
 
     const snapshot = classifyStatus(state, 240_000);
     assert.equal(snapshot.kind, "waiting");
@@ -627,14 +697,18 @@ describe("status.ts", () => {
     assert.equal(advanced.transition, "stalled");
     assert.equal(advanced.snapshot.kind, "stalled");
 
-    state = observeStatus(advanced.nextState, {
-      snapshot: "present",
-      updatedAt: 96_000,
-      sequence: 1,
-      phase: "waiting",
-      waitingSince: 96_000,
-      latestEvent: "agent_end",
-    }, 96_000);
+    state = observeStatus(
+      advanced.nextState,
+      {
+        snapshot: "present",
+        updatedAt: 96_000,
+        sequence: 1,
+        phase: "waiting",
+        waitingSince: 96_000,
+        latestEvent: "agent_end",
+      },
+      96_000,
+    );
     advanced = advanceStatusState(state, 97_000);
     assert.equal(advanced.transition, "recovered");
     assert.equal(advanced.snapshot.kind, "waiting");
@@ -642,15 +716,19 @@ describe("status.ts", () => {
 
   it("keeps the last healthy kind during transient snapshot loss", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "streaming",
-      activeSince: 5_000,
-    }, 5_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "streaming",
+        activeSince: 5_000,
+      },
+      5_000,
+    );
     state = advanceStatusState(state, 6_000).nextState;
     state = observeStatus(state, { snapshot: "missing" }, 10_000);
 
@@ -662,16 +740,20 @@ describe("status.ts", () => {
   it("forces an active state to waiting after interrupt", () => {
     const now = 20_000;
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-    }, 5_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+      },
+      5_000,
+    );
 
     assert.equal(classifyStatus(state, now).kind, "active");
 
@@ -686,25 +768,33 @@ describe("status.ts", () => {
 
   it("orders same-millisecond snapshots by sequence", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 10_000,
-      sequence: 2,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 10_000,
-      activityLabel: "bash",
-    }, 10_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 10_000,
+        sequence: 2,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 10_000,
+        activityLabel: "bash",
+      },
+      10_000,
+    );
 
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 10_000,
-      sequence: 3,
-      phase: "waiting",
-      waitingSince: 10_000,
-      latestEvent: "agent_end",
-    }, 10_001);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 10_000,
+        sequence: 3,
+        phase: "waiting",
+        waitingSince: 10_000,
+        latestEvent: "agent_end",
+      },
+      10_001,
+    );
 
     const snapshot = classifyStatus(state, 11_000);
     assert.equal(snapshot.kind, "waiting");
@@ -713,29 +803,37 @@ describe("status.ts", () => {
 
   it("recovers from a transient snapshot read failure with the same valid snapshot", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 2,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-    }, 5_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 2,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+      },
+      5_000,
+    );
     state = observeStatus(state, { snapshot: "missing" }, 10_000);
     assert.equal(classifyStatus(state, 10_000).statusLabel, null);
 
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 2,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-    }, 11_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 2,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+      },
+      11_000,
+    );
 
     const snapshot = classifyStatus(state, 11_000);
     assert.equal(snapshot.kind, "active");
@@ -744,56 +842,72 @@ describe("status.ts", () => {
 
   it("ignores stale and exact old snapshots after interrupt and accepts newer snapshots", () => {
     let state = createStatusState({ source: "pi", startTimeMs: 0 });
-    state = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-    }, 5_000);
+    state = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+      },
+      5_000,
+    );
     state = forceStatusAfterInterrupt(state, 20_000);
 
-    const stale = observeStatus(state, {
-      snapshot: "present",
-      updatedAt: 5_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 5_000,
-      activityLabel: "bash",
-    }, 21_000);
+    const stale = observeStatus(
+      state,
+      {
+        snapshot: "present",
+        updatedAt: 5_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 5_000,
+        activityLabel: "bash",
+      },
+      21_000,
+    );
     let snapshot = classifyStatus(stale, 21_000);
     assert.equal(snapshot.kind, "waiting");
     assert.equal(snapshot.activityLabel, "interrupted");
 
-    const sameTimestamp = observeStatus(stale, {
-      snapshot: "present",
-      updatedAt: 20_000,
-      sequence: 1,
-      phase: "active",
-      active: true,
-      activeScope: "tool",
-      activeSince: 20_000,
-      activityLabel: "bash",
-    }, 22_000);
+    const sameTimestamp = observeStatus(
+      stale,
+      {
+        snapshot: "present",
+        updatedAt: 20_000,
+        sequence: 1,
+        phase: "active",
+        active: true,
+        activeScope: "tool",
+        activeSince: 20_000,
+        activityLabel: "bash",
+      },
+      22_000,
+    );
     snapshot = classifyStatus(sameTimestamp, 22_000);
     assert.equal(snapshot.kind, "waiting");
     assert.equal(snapshot.activityLabel, "interrupted");
 
-    const resumed = observeStatus(sameTimestamp, {
-      snapshot: "present",
-      sequence: 2,
-      updatedAt: 25_000,
-      phase: "active",
-      active: true,
-      activeScope: "streaming",
-      activeSince: 25_000,
-      activityLabel: "streaming",
-    }, 25_000);
+    const resumed = observeStatus(
+      sameTimestamp,
+      {
+        snapshot: "present",
+        sequence: 2,
+        updatedAt: 25_000,
+        phase: "active",
+        active: true,
+        activeScope: "streaming",
+        activeSince: 25_000,
+        activityLabel: "streaming",
+      },
+      25_000,
+    );
     snapshot = classifyStatus(resumed, 25_000);
     assert.equal(snapshot.kind, "active");
     assert.equal(resumed.activeScope, "streaming");
@@ -820,19 +934,38 @@ describe("status.ts", () => {
       },
       299_000,
     );
-    const line = formatStatusLine(longName, classifyStatus(stalledState, 240_000));
-    const recovered = formatTransitionLine(longName, classifyStatus(activeState, 300_000), "recovered");
+    const line = formatStatusLine(
+      longName,
+      classifyStatus(stalledState, 240_000),
+    );
+    const recovered = formatTransitionLine(
+      longName,
+      classifyStatus(activeState, 300_000),
+      "recovered",
+    );
 
     assert.doesNotMatch(line, /\n/);
     assert.doesNotMatch(recovered, /\n/);
-    assert.ok(line.length <= 120, `expected bounded line length, got ${line.length}`);
-    assert.ok(recovered.length <= 120, `expected bounded line length, got ${recovered.length}`);
+    assert.ok(
+      line.length <= 120,
+      `expected bounded line length, got ${line.length}`,
+    );
+    assert.ok(
+      recovered.length <= 120,
+      `expected bounded line length, got ${recovered.length}`,
+    );
   });
 
   it("caps visible status lines and reports overflow consistently", () => {
     const waitingState = observeStatus(
       createStatusState({ source: "pi", startTimeMs: 0 }),
-      { snapshot: "present", updatedAt: 180_000, sequence: 1, phase: "waiting", waitingSince: 180_000 },
+      {
+        snapshot: "present",
+        updatedAt: 180_000,
+        sequence: 1,
+        phase: "waiting",
+        waitingSince: 180_000,
+      },
       180_000,
     );
     const activeState = observeStatus(
@@ -849,15 +982,35 @@ describe("status.ts", () => {
       },
       419_000,
     );
-    const waitingLine = formatStatusLine("Worker", classifyStatus(waitingState, 300_000));
-    const recoveredLine = formatTransitionLine("Worker", classifyStatus(activeState, 420_000), "recovered");
-    const lines = [waitingLine, recoveredLine, "Scout running 2m.", "Reviewer running 4m.", "Planner running 6m."];
+    const waitingLine = formatStatusLine(
+      "Worker",
+      classifyStatus(waitingState, 300_000),
+    );
+    const recoveredLine = formatTransitionLine(
+      "Worker",
+      classifyStatus(activeState, 420_000),
+      "recovered",
+    );
+    const lines = [
+      waitingLine,
+      recoveredLine,
+      "Scout running 2m.",
+      "Reviewer running 4m.",
+      "Planner running 6m.",
+    ];
     const capped = capStatusLines(lines, 3);
     const aggregate = formatStatusAggregate(lines, 3);
 
     assert.equal(waitingLine, "Worker running 5m, waiting 2m.");
-    assert.equal(recoveredLine, "Worker running 7m, recovered; active (bash 1s).");
-    assert.deepEqual(capped.visibleLines, [waitingLine, recoveredLine, "Scout running 2m."]);
+    assert.equal(
+      recoveredLine,
+      "Worker running 7m, recovered; active (bash 1s).",
+    );
+    assert.deepEqual(capped.visibleLines, [
+      waitingLine,
+      recoveredLine,
+      "Scout running 2m.",
+    ]);
     assert.equal(capped.overflow, 2);
     assert.match(aggregate, /^Subagent status:/);
     assert.match(aggregate, /\+2 more running\./);
@@ -907,10 +1060,14 @@ describe("subagent discovery", () => {
         ].join("\n"),
       );
 
-      const loadedTrue = testApi.loadAgentDefaults("interactive-true-test-agent");
+      const loadedTrue = testApi.loadAgentDefaults(
+        "interactive-true-test-agent",
+      );
       assert.equal(loadedTrue?.interactive, true);
 
-      const loadedFalse = testApi.loadAgentDefaults("interactive-false-test-agent");
+      const loadedFalse = testApi.loadAgentDefaults(
+        "interactive-false-test-agent",
+      );
       assert.equal(loadedFalse?.interactive, false);
     });
   });
@@ -934,12 +1091,18 @@ describe("subagent discovery", () => {
   it("resolveEffectiveInteractive defaults to the inverse of auto-exit", () => {
     // Autonomous agents (auto-exit: true) are NOT interactive — parent gets stall pings.
     assert.equal(
-      testApi.resolveEffectiveInteractive({ name: "A", task: "T" }, { autoExit: true }),
+      testApi.resolveEffectiveInteractive(
+        { name: "A", task: "T" },
+        { autoExit: true },
+      ),
       false,
     );
     // Agents without auto-exit ARE interactive — parent does not receive status transition pings.
     assert.equal(
-      testApi.resolveEffectiveInteractive({ name: "A", task: "T" }, { autoExit: false }),
+      testApi.resolveEffectiveInteractive(
+        { name: "A", task: "T" },
+        { autoExit: false },
+      ),
       true,
     );
     assert.equal(
@@ -1003,7 +1166,10 @@ describe("subagent discovery", () => {
     const planner = testApi.loadAgentDefaults("planner");
     assert.ok(planner, "expected bundled planner to be discoverable");
     assert.equal(
-      testApi.resolveEffectiveInteractive({ name: "planner", task: "" }, planner),
+      testApi.resolveEffectiveInteractive(
+        { name: "planner", task: "" },
+        planner,
+      ),
       true,
       "planner should resolve as interactive (no auto-exit)",
     );
@@ -1028,9 +1194,15 @@ describe("subagent discovery", () => {
   });
 
   it("resolves session mode with fork override precedence", () => {
-    assert.equal(testApi.resolveEffectiveSessionMode({ name: "A", task: "T" }, null), "standalone");
     assert.equal(
-      testApi.resolveEffectiveSessionMode({ name: "A", task: "T" }, { sessionMode: "lineage-only" }),
+      testApi.resolveEffectiveSessionMode({ name: "A", task: "T" }, null),
+      "standalone",
+    );
+    assert.equal(
+      testApi.resolveEffectiveSessionMode(
+        { name: "A", task: "T" },
+        { sessionMode: "lineage-only" },
+      ),
       "lineage-only",
     );
     assert.equal(
@@ -1043,14 +1215,20 @@ describe("subagent discovery", () => {
   });
 
   it("resolves launch behavior for standalone, lineage-only, and fork modes", () => {
-    assert.deepEqual(testApi.resolveLaunchBehavior({ name: "A", task: "T" }, null), {
-      sessionMode: "standalone",
-      seededSessionMode: null,
-      inheritsConversationContext: false,
-      taskDelivery: "artifact",
-    });
     assert.deepEqual(
-      testApi.resolveLaunchBehavior({ name: "A", task: "T" }, { sessionMode: "lineage-only" }),
+      testApi.resolveLaunchBehavior({ name: "A", task: "T" }, null),
+      {
+        sessionMode: "standalone",
+        seededSessionMode: null,
+        inheritsConversationContext: false,
+        taskDelivery: "artifact",
+      },
+    );
+    assert.deepEqual(
+      testApi.resolveLaunchBehavior(
+        { name: "A", task: "T" },
+        { sessionMode: "lineage-only" },
+      ),
       {
         sessionMode: "lineage-only",
         seededSessionMode: "lineage-only",
@@ -1059,7 +1237,10 @@ describe("subagent discovery", () => {
       },
     );
     assert.deepEqual(
-      testApi.resolveLaunchBehavior({ name: "A", task: "T" }, { sessionMode: "fork" }),
+      testApi.resolveLaunchBehavior(
+        { name: "A", task: "T" },
+        { sessionMode: "fork" },
+      ),
       {
         sessionMode: "fork",
         seededSessionMode: "fork",
@@ -1095,21 +1276,33 @@ describe("subagent discovery", () => {
 
   it("buildPiPromptArgs inserts separator for artifact-backed launches with skills", () => {
     assert.deepEqual(
-      testApi.buildPiPromptArgs({ effectiveSkills: "review,lint", taskDelivery: "artifact", taskArg: "@artifact.md" }),
+      testApi.buildPiPromptArgs({
+        effectiveSkills: "review,lint",
+        taskDelivery: "artifact",
+        taskArg: "@artifact.md",
+      }),
       ["", "/skill:review", "/skill:lint", "@artifact.md"],
     );
   });
 
   it("buildPiPromptArgs omits separator for artifact-backed launches without skills", () => {
     assert.deepEqual(
-      testApi.buildPiPromptArgs({ effectiveSkills: undefined, taskDelivery: "artifact", taskArg: "@artifact.md" }),
+      testApi.buildPiPromptArgs({
+        effectiveSkills: undefined,
+        taskDelivery: "artifact",
+        taskArg: "@artifact.md",
+      }),
       ["@artifact.md"],
     );
   });
 
   it("buildPiPromptArgs omits separator for direct launches with skills", () => {
     assert.deepEqual(
-      testApi.buildPiPromptArgs({ effectiveSkills: "review", taskDelivery: "direct", taskArg: "do the task" }),
+      testApi.buildPiPromptArgs({
+        effectiveSkills: "review",
+        taskDelivery: "direct",
+        taskArg: "do the task",
+      }),
       ["/skill:review", "do the task"],
     );
   });
@@ -1129,13 +1322,19 @@ describe("subagent discovery", () => {
       const { api, registeredTools } = createMockExtensionApi();
       (subagentsModule as any).default(api);
 
-      const tool = registeredTools.find((tool) => tool.name === "subagents_list");
+      const tool = registeredTools.find(
+        (tool) => tool.name === "subagents_list",
+      );
       assert.ok(tool, "expected subagents_list to be registered");
 
       const result = await tool.execute();
       const agents = result.details?.agents ?? [];
 
-      assert.ok(agents.some((agent: any) => agent.name === "visible-discovery-test-agent"));
+      assert.ok(
+        agents.some(
+          (agent: any) => agent.name === "visible-discovery-test-agent",
+        ),
+      );
       assert.match(result.content[0].text, /visible-discovery-test-agent/);
     });
   });
@@ -1157,14 +1356,24 @@ describe("subagent discovery", () => {
       const { api, registeredTools } = createMockExtensionApi();
       (subagentsModule as any).default(api);
 
-      const tool = registeredTools.find((tool) => tool.name === "subagents_list");
+      const tool = registeredTools.find(
+        (tool) => tool.name === "subagents_list",
+      );
       assert.ok(tool, "expected subagents_list to be registered");
 
       const result = await tool.execute();
       const agents = result.details?.agents ?? [];
 
-      assert.equal(agents.some((agent: any) => agent.name === "hidden-discovery-test-agent"), false);
-      assert.doesNotMatch(result.content[0].text, /hidden-discovery-test-agent/);
+      assert.equal(
+        agents.some(
+          (agent: any) => agent.name === "hidden-discovery-test-agent",
+        ),
+        false,
+      );
+      assert.doesNotMatch(
+        result.content[0].text,
+        /hidden-discovery-test-agent/,
+      );
 
       const loaded = testApi.loadAgentDefaults("hidden-discovery-test-agent");
       assert.ok(loaded, "expected hidden agent to remain directly loadable");
@@ -1175,47 +1384,64 @@ describe("subagent discovery", () => {
   });
 
   it("lets a hidden project agent shadow a visible global agent", async () => {
-    await withIsolatedAgentEnv(async ({ projectAgentsDir, globalAgentsDir }) => {
-      writeAgentFile(
-        globalAgentsDir,
-        "shadowed-discovery-test-agent",
-        [
-          "name: shadowed-discovery-test-agent",
-          "description: Global visible agent",
-          "model: anthropic/test-global",
-        ].join("\n"),
-        "You are the global visible agent.",
-      );
-      writeAgentFile(
-        projectAgentsDir,
-        "shadowed-discovery-test-agent",
-        [
-          "name: shadowed-discovery-test-agent",
-          "description: Project hidden agent",
-          "model: anthropic/test-project",
-          "disable-model-invocation: true",
-        ].join("\n"),
-        "You are the project hidden agent.",
-      );
+    await withIsolatedAgentEnv(
+      async ({ projectAgentsDir, globalAgentsDir }) => {
+        writeAgentFile(
+          globalAgentsDir,
+          "shadowed-discovery-test-agent",
+          [
+            "name: shadowed-discovery-test-agent",
+            "description: Global visible agent",
+            "model: anthropic/test-global",
+          ].join("\n"),
+          "You are the global visible agent.",
+        );
+        writeAgentFile(
+          projectAgentsDir,
+          "shadowed-discovery-test-agent",
+          [
+            "name: shadowed-discovery-test-agent",
+            "description: Project hidden agent",
+            "model: anthropic/test-project",
+            "disable-model-invocation: true",
+          ].join("\n"),
+          "You are the project hidden agent.",
+        );
 
-      const { api, registeredTools } = createMockExtensionApi();
-      (subagentsModule as any).default(api);
+        const { api, registeredTools } = createMockExtensionApi();
+        (subagentsModule as any).default(api);
 
-      const tool = registeredTools.find((tool) => tool.name === "subagents_list");
-      assert.ok(tool, "expected subagents_list to be registered");
+        const tool = registeredTools.find(
+          (tool) => tool.name === "subagents_list",
+        );
+        assert.ok(tool, "expected subagents_list to be registered");
 
-      const result = await tool.execute();
-      const agents = result.details?.agents ?? [];
+        const result = await tool.execute();
+        const agents = result.details?.agents ?? [];
 
-      assert.equal(agents.some((agent: any) => agent.name === "shadowed-discovery-test-agent"), false);
-      assert.doesNotMatch(result.content[0].text, /shadowed-discovery-test-agent/);
+        assert.equal(
+          agents.some(
+            (agent: any) => agent.name === "shadowed-discovery-test-agent",
+          ),
+          false,
+        );
+        assert.doesNotMatch(
+          result.content[0].text,
+          /shadowed-discovery-test-agent/,
+        );
 
-      const loaded = testApi.loadAgentDefaults("shadowed-discovery-test-agent");
-      assert.ok(loaded, "expected project override to remain directly loadable");
-      assert.equal(loaded.model, "anthropic/test-project");
-      assert.equal(loaded.body, "You are the project hidden agent.");
-      assert.equal(loaded.disableModelInvocation, true);
-    });
+        const loaded = testApi.loadAgentDefaults(
+          "shadowed-discovery-test-agent",
+        );
+        assert.ok(
+          loaded,
+          "expected project override to remain directly loadable",
+        );
+        assert.equal(loaded.model, "anthropic/test-project");
+        assert.equal(loaded.body, "You are the project hidden agent.");
+        assert.equal(loaded.disableModelInvocation, true);
+      },
+    );
   });
 });
 describe("subagent-done.ts", () => {
@@ -1249,7 +1475,13 @@ describe("subagent-done.ts", () => {
       // Auto-exit subagents must shut down on retry-exhaustion errors so the
       // parent is woken. The error sidecar (written separately) carries the
       // failure detail; staying open would just strand the worker.
-      const messages = [{ role: "assistant", stopReason: "error", errorMessage: "529 overloaded" }];
+      const messages = [
+        {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "529 overloaded",
+        },
+      ];
       assert.equal(shouldAutoExitOnAgentEnd(false, messages), true);
     });
   });
@@ -1257,9 +1489,17 @@ describe("subagent-done.ts", () => {
   describe("findLatestAssistantError", () => {
     it("returns the error info from a stopReason=error message", () => {
       const messages = [
-        { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "ok" }] },
+        {
+          role: "assistant",
+          stopReason: "stop",
+          content: [{ type: "text", text: "ok" }],
+        },
         { role: "toolResult", content: [] },
-        { role: "assistant", stopReason: "error", errorMessage: "Anthropic 529 Overloaded" },
+        {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "Anthropic 529 Overloaded",
+        },
       ];
       assert.deepEqual(findLatestAssistantError(messages), {
         errorMessage: "Anthropic 529 Overloaded",
@@ -1271,7 +1511,11 @@ describe("subagent-done.ts", () => {
       const messages = [
         { role: "assistant", stopReason: "error", errorMessage: "old failure" },
         { role: "user", content: [] },
-        { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "done" }] },
+        {
+          role: "assistant",
+          stopReason: "stop",
+          content: [{ type: "text", text: "done" }],
+        },
       ];
       assert.equal(findLatestAssistantError(messages), null);
     });
@@ -1301,7 +1545,11 @@ describe("cmux.ts interpretExitSidecar", () => {
 
   it("decodes ping payloads", () => {
     assert.deepEqual(
-      interpretExitSidecar({ type: "ping", name: "Worker", message: "need help" }),
+      interpretExitSidecar({
+        type: "ping",
+        name: "Worker",
+        message: "need help",
+      }),
       {
         reason: "ping",
         exitCode: 0,
@@ -1341,16 +1589,22 @@ describe("cmux.ts interpretExitSidecar", () => {
 
   it("treats unknown payload shapes as done", () => {
     assert.deepEqual(interpretExitSidecar({}), { reason: "done", exitCode: 0 });
-    assert.deepEqual(interpretExitSidecar(null), { reason: "done", exitCode: 0 });
+    assert.deepEqual(interpretExitSidecar(null), {
+      reason: "done",
+      exitCode: 0,
+    });
   });
 });
 describe("commands", () => {
   it("/iterate always emits a full-context fork tool call", () => {
-    const { api, registeredCommands, sentUserMessages } = createMockExtensionApi();
+    const { api, registeredCommands, sentUserMessages } =
+      createMockExtensionApi();
 
     (subagentsModule as any).default(api);
 
-    const iterate = registeredCommands.find((command) => command.name === "iterate");
+    const iterate = registeredCommands.find(
+      (command) => command.name === "iterate",
+    );
     assert.ok(iterate, "expected /iterate to be registered");
 
     iterate.handler("Fix the bug", {});
@@ -1388,7 +1642,9 @@ describe("tool registration", () => {
     const { api, registeredTools } = createMockExtensionApi();
     (subagentsModule as any).default(api);
 
-    const subagentTool = registeredTools.find((tool) => tool.name === "subagent");
+    const subagentTool = registeredTools.find(
+      (tool) => tool.name === "subagent",
+    );
     assert.ok(subagentTool, "expected subagent tool to be registered");
 
     const theme = {
@@ -1409,7 +1665,9 @@ describe("tool registration", () => {
     const { api, registeredTools } = createMockExtensionApi();
     (subagentsModule as any).default(api);
 
-    const resumeTool = registeredTools.find((tool) => tool.name === "subagent_resume");
+    const resumeTool = registeredTools.find(
+      (tool) => tool.name === "subagent_resume",
+    );
     assert.ok(resumeTool, "expected subagent_resume tool to be registered");
 
     const autoExitSchema = resumeTool.parameters.properties.autoExit;
@@ -1503,7 +1761,10 @@ describe("subagent activity snapshots", () => {
 
       for (const [index, overrides] of cases.entries()) {
         const activityFile = getSubagentActivityFile(dir, `child-${index}`);
-        const activity = validActivity({ runningChildId: `child-${index}`, ...overrides });
+        const activity = validActivity({
+          runningChildId: `child-${index}`,
+          ...overrides,
+        });
         writeFileSync(activityFile, `${JSON.stringify(activity)}\n`);
 
         const read = readSubagentActivityFile(activityFile, `child-${index}`);
@@ -1610,7 +1871,10 @@ describe("subagent interruption", () => {
 
     (subagentsModule as any).default(api);
 
-    assert.equal(registeredTools.some((tool) => tool.name === "subagent_interrupt"), true);
+    assert.equal(
+      registeredTools.some((tool) => tool.name === "subagent_interrupt"),
+      true,
+    );
   });
 
   it("resolves interrupt targets by exact id and reports name ambiguity", () => {
@@ -1619,9 +1883,33 @@ describe("subagent interruption", () => {
     runningMap.clear();
 
     try {
-      runningMap.set("a1", makeRunning({ id: "a1", name: "Worker", surface: "a1", sessionFile: "a1.jsonl" }));
-      runningMap.set("b2", makeRunning({ id: "b2", name: "Worker", surface: "b2", sessionFile: "b2.jsonl" }));
-      runningMap.set("c3", makeRunning({ id: "c3", name: "Scout", surface: "c3", sessionFile: "c3.jsonl" }));
+      runningMap.set(
+        "a1",
+        makeRunning({
+          id: "a1",
+          name: "Worker",
+          surface: "a1",
+          sessionFile: "a1.jsonl",
+        }),
+      );
+      runningMap.set(
+        "b2",
+        makeRunning({
+          id: "b2",
+          name: "Worker",
+          surface: "b2",
+          sessionFile: "b2.jsonl",
+        }),
+      );
+      runningMap.set(
+        "c3",
+        makeRunning({
+          id: "c3",
+          name: "Scout",
+          surface: "c3",
+          sessionFile: "c3.jsonl",
+        }),
+      );
 
       const byId = testApi.resolveInterruptTarget({ id: "c3", name: "Worker" });
       assert.equal(byId.running.id, "c3");
@@ -1676,12 +1964,17 @@ describe("subagent interruption", () => {
     try {
       runningMap.set("a1", makeRunning({ statusState: activeState }));
 
-      const result = withMockedNow(20_000, () => testApi.handleSubagentInterrupt({ name: "Worker" }, () => {
-        throw new Error("mux write failed");
-      }));
+      const result = withMockedNow(20_000, () =>
+        testApi.handleSubagentInterrupt({ name: "Worker" }, () => {
+          throw new Error("mux write failed");
+        }),
+      );
 
       assert.match(result.content[0].text, /Failed to send Escape/);
-      assert.equal(classifyStatus(runningMap.get("a1").statusState, 20_000).kind, "active");
+      assert.equal(
+        classifyStatus(runningMap.get("a1").statusState, 20_000).kind,
+        "active",
+      );
     } finally {
       runningMap.clear();
     }
@@ -1699,9 +1992,12 @@ describe("subagent interruption", () => {
       },
     });
 
-    const result = testApi.requestSubagentInterrupt(running, (surface: string) => {
-      sentSurface = surface;
-    });
+    const result = testApi.requestSubagentInterrupt(
+      running,
+      (surface: string) => {
+        sentSurface = surface;
+      },
+    );
 
     assert.deepEqual(result, { ok: true });
     assert.equal(sentSurface, "pane-1");
@@ -1737,14 +2033,22 @@ describe("subagent interruption", () => {
       writeFileSync(activityFile, `${JSON.stringify(activity)}\n`);
 
       try {
-        runningMap.set("a1", makeRunning({
-          activityFile,
-          statusState: createStatusState({ source: "pi", startTimeMs: 0 }),
-        }));
+        runningMap.set(
+          "a1",
+          makeRunning({
+            activityFile,
+            statusState: createStatusState({ source: "pi", startTimeMs: 0 }),
+          }),
+        );
 
-        withMockedNow(20_000, () => testApi.handleSubagentInterrupt({ name: "Worker" }, (surface: string) => {
-          sentSurface = surface;
-        }));
+        withMockedNow(20_000, () =>
+          testApi.handleSubagentInterrupt(
+            { name: "Worker" },
+            (surface: string) => {
+              sentSurface = surface;
+            },
+          ),
+        );
 
         assert.equal(sentSurface, "pane-1");
         const state = runningMap.get("a1").statusState;
@@ -1784,13 +2088,25 @@ describe("subagent interruption", () => {
     try {
       runningMap.set("a1", makeRunning({ statusState: activeState }));
 
-      const result = withMockedNow(20_000, () => testApi.handleSubagentInterrupt({ name: "Worker" }, (surface: string) => {
-        sentSurface = surface;
-      }));
+      const result = withMockedNow(20_000, () =>
+        testApi.handleSubagentInterrupt(
+          { name: "Worker" },
+          (surface: string) => {
+            sentSurface = surface;
+          },
+        ),
+      );
 
       assert.equal(sentSurface, "pane-1");
-      assert.equal(result.content[0].text, 'Interrupt requested for subagent "Worker".');
-      assert.deepEqual(result.details, { id: "a1", name: "Worker", status: "interrupt_requested" });
+      assert.equal(
+        result.content[0].text,
+        'Interrupt requested for subagent "Worker".',
+      );
+      assert.deepEqual(result.details, {
+        id: "a1",
+        name: "Worker",
+        status: "interrupt_requested",
+      });
       const snapshot = classifyStatus(runningMap.get("a1").statusState, 20_000);
       assert.equal(snapshot.kind, "waiting");
       assert.equal(snapshot.activityLabel, "interrupted");
@@ -1837,7 +2153,10 @@ describe("subagent interruption", () => {
       });
 
       assert.equal(delivered, false);
-      assert.match(result.content[0].text, /currently supported only for Pi-backed subagents/i);
+      assert.match(
+        result.content[0].text,
+        /currently supported only for Pi-backed subagents/i,
+      );
       assert.deepEqual(result.details, {
         error: "claude interrupt unsupported",
         id: "a1",
@@ -1885,7 +2204,10 @@ describe("subagent interruption", () => {
 
     assert.match(presentation, /Sub-agent "Worker" failed/);
     assert.match(presentation, /provider\/agent error — auto-retry exhausted/);
-    assert.match(presentation, /Error: Anthropic 529 Overloaded after 3 retries/);
+    assert.match(
+      presentation,
+      /Error: Anthropic 529 Overloaded after 3 retries/,
+    );
     assert.match(presentation, /subagent_resume/);
     assert.match(presentation, /Resume: pi --session/);
     assert.doesNotMatch(presentation, /ignored when errorMessage is present/);
@@ -1911,8 +2233,13 @@ describe("subagent status renderer", () => {
     const { api, registeredMessageRenderers } = createMockExtensionApi();
     (subagentsModule as any).default(api);
 
-    const rendererEntry = registeredMessageRenderers.find((entry) => entry.name === "subagent_status");
-    assert.ok(rendererEntry, "expected subagent_status renderer to be registered");
+    const rendererEntry = registeredMessageRenderers.find(
+      (entry) => entry.name === "subagent_status",
+    );
+    assert.ok(
+      rendererEntry,
+      "expected subagent_status renderer to be registered",
+    );
 
     const visibleLines = [
       "Worker running 5m, active (bash 2m).",
@@ -1936,7 +2263,10 @@ describe("subagent status renderer", () => {
 
     assert.match(output, /Subagent status/);
     for (const line of visibleLines) {
-      assert.match(output, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(
+        output,
+        new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      );
     }
     assert.match(output, /\+2 more running\./);
   });
@@ -1945,14 +2275,22 @@ describe("subagent status renderer", () => {
     const { api, registeredMessageRenderers } = createMockExtensionApi();
     (subagentsModule as any).default(api);
 
-    const rendererEntry = registeredMessageRenderers.find((entry) => entry.name === "subagent_status");
-    assert.ok(rendererEntry, "expected subagent_status renderer to be registered");
+    const rendererEntry = registeredMessageRenderers.find(
+      (entry) => entry.name === "subagent_status",
+    );
+    assert.ok(
+      rendererEntry,
+      "expected subagent_status renderer to be registered",
+    );
 
     const rendered = rendererEntry.renderer(
       {
         customType: "subagent_status",
         content: "Subagent status:\n• Worker running 5m, active (bash 2m).",
-        details: { lines: ["Worker running 5m, active (bash 2m)."], overflow: 0 },
+        details: {
+          lines: ["Worker running 5m, active (bash 2m)."],
+          overflow: 0,
+        },
       },
       { expanded: true },
       createTheme(),
@@ -2009,35 +2347,47 @@ describe("subagents widget rendering", () => {
     const originalNow = Date.now;
     Date.now = () => 1_000_000;
     try {
-      const lines = testApi.renderSubagentWidgetLines([
-        {
-          id: "a1",
-          name: "A",
-          task: "",
-          surface: "s1",
-          startTime: 1_000_000 - 13_000,
-          sessionFile: "sess1",
-          statusState: createStatusState({ source: "pi", startTimeMs: 1_000_000 - 13_000 }),
-        },
-        {
-          id: "a2",
-          name: "B",
-          task: "",
-          surface: "s2",
-          startTime: 1_000_000 - 21_000,
-          sessionFile: "sess2",
-          statusState: createStatusState({ source: "pi", startTimeMs: 1_000_000 - 21_000 }),
-        },
-        {
-          id: "a3",
-          name: "C",
-          task: "",
-          surface: "s3",
-          startTime: 1_000_000 - 27_000,
-          sessionFile: "sess3",
-          statusState: createStatusState({ source: "pi", startTimeMs: 1_000_000 - 27_000 }),
-        },
-      ], 16);
+      const lines = testApi.renderSubagentWidgetLines(
+        [
+          {
+            id: "a1",
+            name: "A",
+            task: "",
+            surface: "s1",
+            startTime: 1_000_000 - 13_000,
+            sessionFile: "sess1",
+            statusState: createStatusState({
+              source: "pi",
+              startTimeMs: 1_000_000 - 13_000,
+            }),
+          },
+          {
+            id: "a2",
+            name: "B",
+            task: "",
+            surface: "s2",
+            startTime: 1_000_000 - 21_000,
+            sessionFile: "sess2",
+            statusState: createStatusState({
+              source: "pi",
+              startTimeMs: 1_000_000 - 21_000,
+            }),
+          },
+          {
+            id: "a3",
+            name: "C",
+            task: "",
+            surface: "s3",
+            startTime: 1_000_000 - 27_000,
+            sessionFile: "sess3",
+            statusState: createStatusState({
+              source: "pi",
+              startTimeMs: 1_000_000 - 27_000,
+            }),
+          },
+        ],
+        16,
+      );
 
       assert.deepEqual(
         lines.map((line: string) => visibleWidth(line)),
@@ -2065,17 +2415,23 @@ describe("subagents widget rendering", () => {
     const widths = [0, 1, 2];
     for (const width of widths) {
       const startTime = Date.now() - 5_000;
-      const lines = testApi.renderSubagentWidgetLines([
-        {
-          id: "a1",
-          name: "A",
-          task: "",
-          surface: "s1",
-          startTime,
-          sessionFile: "sess1",
-          statusState: createStatusState({ source: "pi", startTimeMs: startTime }),
-        },
-      ], width);
+      const lines = testApi.renderSubagentWidgetLines(
+        [
+          {
+            id: "a1",
+            name: "A",
+            task: "",
+            surface: "s1",
+            startTime,
+            sessionFile: "sess1",
+            statusState: createStatusState({
+              source: "pi",
+              startTimeMs: startTime,
+            }),
+          },
+        ],
+        width,
+      );
 
       for (const line of lines) {
         assert.ok(
@@ -2114,14 +2470,18 @@ describe("cmux.ts", () => {
   describe("parseCmuxFocusedSnapshot", () => {
     it("parses focused surface and pane refs", () => {
       assert.deepEqual(
-        parseCmuxFocusedSnapshot({ focused: { surface_ref: "surface:3", pane_ref: "pane:2" } }),
+        parseCmuxFocusedSnapshot({
+          focused: { surface_ref: "surface:3", pane_ref: "pane:2" },
+        }),
         { surfaceRef: "surface:3", paneRef: "pane:2" },
       );
     });
 
     it("does not fall back to caller refs", () => {
       assert.equal(
-        parseCmuxFocusedSnapshot({ caller: { surface_ref: "surface:1", pane_ref: "pane:1" } }),
+        parseCmuxFocusedSnapshot({
+          caller: { surface_ref: "surface:1", pane_ref: "pane:1" },
+        }),
         null,
       );
     });
@@ -2149,11 +2509,15 @@ describe("cmux.ts", () => {
 
     it("returns null when focused is absent or not an object", () => {
       assert.equal(
-        parseCmuxFocusedSnapshotFromJson('{"focused":null,"caller":{"surface_ref":"surface:1","pane_ref":"pane:1"}}'),
+        parseCmuxFocusedSnapshotFromJson(
+          '{"focused":null,"caller":{"surface_ref":"surface:1","pane_ref":"pane:1"}}',
+        ),
         null,
       );
       assert.equal(
-        parseCmuxFocusedSnapshotFromJson('{"caller":{"surface_ref":"surface:1","pane_ref":"pane:1"}}'),
+        parseCmuxFocusedSnapshotFromJson(
+          '{"caller":{"surface_ref":"surface:1","pane_ref":"pane:1"}}',
+        ),
         null,
       );
     });
@@ -2171,7 +2535,10 @@ describe("cmux.ts", () => {
   describe("parseCmuxPaneRefForSurface", () => {
     it("parses top-level pane refs for a surface", () => {
       assert.equal(
-        parseCmuxPaneRefForSurface({ surface_ref: "surface:7", pane_ref: "pane:4" }, "surface:7"),
+        parseCmuxPaneRefForSurface(
+          { surface_ref: "surface:7", pane_ref: "pane:4" },
+          "surface:7",
+        ),
         "pane:4",
       );
     });
@@ -2188,7 +2555,10 @@ describe("cmux.ts", () => {
 
     it("returns null when the surface does not match", () => {
       assert.equal(
-        parseCmuxPaneRefForSurface({ surface_ref: "surface:8", pane_ref: "pane:4" }, "surface:7"),
+        parseCmuxPaneRefForSurface(
+          { surface_ref: "surface:8", pane_ref: "pane:4" },
+          "surface:7",
+        ),
         null,
       );
     });
@@ -2196,7 +2566,10 @@ describe("cmux.ts", () => {
 
   describe("parseCmuxPaneRefForSurfaceFromJson", () => {
     it("returns null for malformed JSON text", () => {
-      assert.equal(parseCmuxPaneRefForSurfaceFromJson("not json", "surface:7"), null);
+      assert.equal(
+        parseCmuxPaneRefForSurfaceFromJson("not json", "surface:7"),
+        null,
+      );
     });
 
     it("parses caller refs from cmux identify --surface JSON text", () => {
@@ -2224,21 +2597,60 @@ describe("cmux.ts", () => {
     });
 
     it("matches Zellij direction and minimum split rules", () => {
-      assert.equal(predictZellijSplitDirection(pane({ pane_rows: 5, pane_columns: 11 })), "right");
-      assert.equal(predictZellijSplitDirection(pane({ pane_rows: 11, pane_columns: 5 })), "down");
-      assert.equal(predictZellijSplitDirection(pane({ pane_rows: 5, pane_columns: 10 })), null);
-      assert.equal(predictZellijSplitDirection(pane({ pane_rows: 4, pane_columns: 80 })), null);
+      assert.equal(
+        predictZellijSplitDirection(pane({ pane_rows: 5, pane_columns: 11 })),
+        "right",
+      );
+      assert.equal(
+        predictZellijSplitDirection(pane({ pane_rows: 11, pane_columns: 5 })),
+        "down",
+      );
+      assert.equal(
+        predictZellijSplitDirection(pane({ pane_rows: 5, pane_columns: 10 })),
+        null,
+      );
+      assert.equal(
+        predictZellijSplitDirection(pane({ pane_rows: 4, pane_columns: 80 })),
+        null,
+      );
 
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 5, pane_columns: 11 })), true);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 11, pane_columns: 5 })), true);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 5, pane_columns: 10 })), false);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 4, pane_columns: 80 })), false);
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 5, pane_columns: 11 })),
+        true,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 11, pane_columns: 5 })),
+        true,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 5, pane_columns: 10 })),
+        false,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 4, pane_columns: 80 })),
+        false,
+      );
 
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 30, pane_columns: 100 }), 80, 20), false);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 45, pane_columns: 100 }), 80, 20), true);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 30, pane_columns: 170 }), 80, 20), true);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 31, pane_columns: 47 }), 50, 10), false);
-      assert.equal(canSplitZellijPane(pane({ pane_rows: 31, pane_columns: 77 }), 50, 10), true);
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 30, pane_columns: 100 }), 80, 20),
+        false,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 45, pane_columns: 100 }), 80, 20),
+        true,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 30, pane_columns: 170 }), 80, 20),
+        true,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 31, pane_columns: 47 }), 50, 10),
+        false,
+      );
+      assert.equal(
+        canSplitZellijPane(pane({ pane_rows: 31, pane_columns: 77 }), 50, 10),
+        true,
+      );
     });
 
     it("uses tab-scoped split only when all Zellij split candidates are safe", () => {
@@ -2346,10 +2758,34 @@ describe("cmux.ts", () => {
       const plan = selectZellijPlacement(
         [
           pane({ id: 10, tab_id: 1, pane_rows: 5, pane_columns: 10 }),
-          pane({ id: 11, tab_id: 1, pane_rows: 60, pane_columns: 200, is_floating: true }),
-          pane({ id: 12, tab_id: 1, pane_rows: 60, pane_columns: 200, is_plugin: true }),
-          pane({ id: 13, tab_id: 1, pane_rows: 60, pane_columns: 200, exited: true }),
-          pane({ id: 14, tab_id: 1, pane_rows: 60, pane_columns: 200, is_selectable: false }),
+          pane({
+            id: 11,
+            tab_id: 1,
+            pane_rows: 60,
+            pane_columns: 200,
+            is_floating: true,
+          }),
+          pane({
+            id: 12,
+            tab_id: 1,
+            pane_rows: 60,
+            pane_columns: 200,
+            is_plugin: true,
+          }),
+          pane({
+            id: 13,
+            tab_id: 1,
+            pane_rows: 60,
+            pane_columns: 200,
+            exited: true,
+          }),
+          pane({
+            id: 14,
+            tab_id: 1,
+            pane_rows: 60,
+            pane_columns: 200,
+            is_selectable: false,
+          }),
           pane({ id: 15, tab_id: 2, pane_rows: 60, pane_columns: 200 }),
         ],
         10,
@@ -2393,14 +2829,23 @@ describe("parseHerdrSplitPaneId", () => {
   });
 
   it("throws on missing result.pane.pane_id", () => {
-    assert.throws(() => parseHerdrSplitPaneId("{}"), /missing result\.pane\.pane_id/);
+    assert.throws(
+      () => parseHerdrSplitPaneId("{}"),
+      /missing result\.pane\.pane_id/,
+    );
   });
 
   it("throws on non-JSON output", () => {
-    assert.throws(() => parseHerdrSplitPaneId("not json"), /Unexpected herdr pane split output/);
+    assert.throws(
+      () => parseHerdrSplitPaneId("not json"),
+      /Unexpected herdr pane split output/,
+    );
   });
 
   it("throws on empty output", () => {
-    assert.throws(() => parseHerdrSplitPaneId(""), /Unexpected herdr pane split output/);
+    assert.throws(
+      () => parseHerdrSplitPaneId(""),
+      /Unexpected herdr pane split output/,
+    );
   });
 });

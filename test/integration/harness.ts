@@ -69,12 +69,18 @@ const TEST_AGENTS_SRC = join(HARNESS_DIR, "agents");
  * edits are always the code under test, regardless of what pi-packages are
  * installed on the host.
  */
-const EXTENSION_SOURCE = join(PROJECT_ROOT, "pi-extension", "subagents", "index.ts");
+const EXTENSION_SOURCE = join(
+  PROJECT_ROOT,
+  "pi-extension",
+  "subagents",
+  "index.ts",
+);
 
 // ── Configuration ──
 
 /** Model used for integration tests. Override with PI_TEST_MODEL env var. */
-export const TEST_MODEL = process.env.PI_TEST_MODEL ?? "anthropic/claude-haiku-4-5";
+export const TEST_MODEL =
+  process.env.PI_TEST_MODEL ?? "anthropic/claude-haiku-4-5";
 
 /** Per-test timeout in ms. Override with PI_TEST_TIMEOUT env var. */
 export const PI_TIMEOUT = Number(process.env.PI_TEST_TIMEOUT ?? "120000");
@@ -93,7 +99,7 @@ export function getAvailableBackends(): MuxBackend[] {
     process.env.PI_SUBAGENT_MUX = backend;
     try {
       if (getMuxBackend() === backend) backends.push(backend);
-    // pi-lens-ignore: error-swallowing
+      // pi-lens-ignore: error-swallowing
     } catch {}
   }
 
@@ -117,8 +123,13 @@ export function restoreBackend(prev: string | undefined): void {
 export function focusSurface(backend: MuxBackend, surface: string): void {
   if (backend === "cmux") {
     const pane = getSurfacePane(backend, surface);
-    if (pane) execFileSync("cmux", ["focus-pane", "--pane", pane], { encoding: "utf8" });
-    execFileSync("cmux", ["focus-panel", "--panel", surface], { encoding: "utf8" });
+    if (pane)
+      execFileSync("cmux", ["focus-pane", "--pane", pane], {
+        encoding: "utf8",
+      });
+    execFileSync("cmux", ["focus-panel", "--panel", surface], {
+      encoding: "utf8",
+    });
     return;
   }
 
@@ -132,15 +143,21 @@ export function focusSurface(backend: MuxBackend, surface: string): void {
 
 export function getFocusedSurface(backend: MuxBackend): string | null {
   if (backend === "cmux") {
-    const info = execFileSync("cmux", ["identify", "--json"], { encoding: "utf8" });
+    const info = execFileSync("cmux", ["identify", "--json"], {
+      encoding: "utf8",
+    });
     return parseCmuxFocusedSnapshotFromJson(info)?.surfaceRef ?? null;
   }
 
   if (backend === "tmux") {
     try {
-      const panes = execFileSync("tmux", ["list-panes", "-F", "#{pane_id} #{pane_active}"], {
-        encoding: "utf8",
-      });
+      const panes = execFileSync(
+        "tmux",
+        ["list-panes", "-F", "#{pane_id} #{pane_active}"],
+        {
+          encoding: "utf8",
+        },
+      );
       const activeLine = panes.split("\n").find((line) => line.endsWith(" 1"));
       return activeLine?.split(" ")[0] ?? null;
     } catch {
@@ -151,9 +168,14 @@ export function getFocusedSurface(backend: MuxBackend): string | null {
   throw new Error(`Focus helpers are not implemented for ${backend}`);
 }
 
-export function getSurfacePane(backend: MuxBackend, surface: string): string | null {
+export function getSurfacePane(
+  backend: MuxBackend,
+  surface: string,
+): string | null {
   if (backend === "cmux") {
-    const info = execFileSync("cmux", ["identify", "--surface", surface], { encoding: "utf8" });
+    const info = execFileSync("cmux", ["identify", "--surface", surface], {
+      encoding: "utf8",
+    });
     return parseCmuxPaneRefForSurfaceFromJson(info, surface);
   }
 
@@ -220,18 +242,18 @@ export function cleanupTestEnv(env: TestEnv): void {
   for (const surface of env.surfaces) {
     try {
       closeSurface(surface);
-    // pi-lens-ignore: error-swallowing
+      // pi-lens-ignore: error-swallowing
     } catch {}
   }
   for (const file of env.tempFiles) {
     try {
       unlinkSync(file);
-    // pi-lens-ignore: error-swallowing
+      // pi-lens-ignore: error-swallowing
     } catch {}
   }
   try {
     rmSync(env.dir, { recursive: true, force: true });
-  // pi-lens-ignore: error-swallowing
+    // pi-lens-ignore: error-swallowing
   } catch {}
 }
 
@@ -318,7 +340,7 @@ export async function waitForScreen(
     try {
       const screen = await readScreenAsync(surface, lines);
       if (pattern.test(screen)) return screen;
-    // pi-lens-ignore: error-swallowing
+      // pi-lens-ignore: error-swallowing
     } catch {}
     await sleep(2000);
   }
@@ -326,7 +348,7 @@ export async function waitForScreen(
   let finalScreen = "";
   try {
     finalScreen = readScreen(surface, lines);
-  // pi-lens-ignore: error-swallowing
+    // pi-lens-ignore: error-swallowing
   } catch {}
   throw new Error(
     `Timeout (${timeout}ms) waiting for pattern ${pattern}.\nLast screen:\n${finalScreen.slice(-1000)}`,
