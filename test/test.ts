@@ -1674,7 +1674,7 @@ describe("tool registration", () => {
 
     const autoExitSchema = resumeTool.parameters.properties.autoExit;
     assert.equal(autoExitSchema.type, "boolean");
-    assert.match(autoExitSchema.description, /Defaults to true/);
+    assert.match(autoExitSchema.description, /Default true/);
   });
 });
 

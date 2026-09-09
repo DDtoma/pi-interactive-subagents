@@ -106,7 +106,7 @@ const SubagentParams = Type.Object({
   agent: Type.Optional(
     Type.String({
       description:
-        "Agent name to load defaults from (e.g. 'worker', 'scout', 'reviewer'). Reads ~/.pi/agent/agents/<name>.md for model, tools, skills.",
+        "Agent name for defaults (e.g. 'worker'). Reads ~/.pi/agent/agents/<name>.md.",
     }),
   ),
   systemPrompt: Type.Optional(
@@ -125,31 +125,31 @@ const SubagentParams = Type.Object({
   tools: Type.Optional(
     Type.String({
       description:
-        "Comma-separated tools the subagent should restrict itself to. Soft constraint stated in the prompt, not enforced — the child always launches with the full tool set (overrides agent default)",
+        "Comma-separated tools to restrict to (soft prompt constraint, not enforced; overrides agent default)",
     }),
   ),
   cwd: Type.Optional(
     Type.String({
       description:
-        "Working directory for the sub-agent. The agent starts in this folder and picks up its local .pi/ config, CLAUDE.md, skills, and extensions. Use for role-specific subfolders.",
+        "Working directory; picks up its local .pi/ config, CLAUDE.md, skills, and extensions.",
     }),
   ),
   fork: Type.Optional(
     Type.Boolean({
       description:
-        "Force the full-context fork mode for this spawn. The sub-agent inherits the current session conversation, overriding any agent frontmatter session-mode.",
+        "Inherit the current session conversation (full-context fork), overriding agent frontmatter session-mode.",
     }),
   ),
   interactive: Type.Optional(
     Type.Boolean({
       description:
-        "Mark the subagent as interactive (long-running, user drives the conversation in its own pane). When true, the main session is not woken by status transitions (stalled/recovered) for this subagent. If omitted, falls back to the agent's `interactive` frontmatter, otherwise the inverse of `auto-exit` (agents that auto-exit are autonomous and get stall pings; agents that don't are interactive and stay quiet).",
+        "Mark interactive: long-running, user drives the conversation in its own terminal pane; stalled/recovered transitions won't wake the main session. Default: agent's `interactive` frontmatter, else inverse of `auto-exit`.",
     }),
   ),
   resumeSessionId: Type.Optional(
     Type.String({
       description:
-        "Resume a previous Claude Code session by its ID. Loads the conversation history and continues where it left off. The session ID is returned in details of every claude tool call. Use this to retry cancelled runs or ask follow-up questions.",
+        "Resume a previous Claude Code session by ID, loading its history. The ID is in the details of every claude tool call. Use to retry cancelled runs or follow up.",
     }),
   ),
 });
@@ -1588,19 +1588,12 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       name: "subagent",
       label: "Subagent",
       description:
-        "Spawn a sub-agent in a dedicated terminal multiplexer pane. " +
-        "This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. " +
-        "When the sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. " +
-        "DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT call subagents_list or any other tool to 'check' status. All of that is wasted work — the harness handles delivery for you. " +
-        "DO NOT fabricate, assume, or summarize results after calling this tool. " +
-        "After spawning, either end your turn immediately, or work on other independent tasks (including spawning more subagents in parallel). The harness will wake you with the result when it is ready.",
+        "Spawn a sub-agent to handle a task. " +
+        "Fire-and-forget: returns immediately with an acknowledgement; when it finishes, the harness delivers the result as a steer message that wakes you — " +
+        "never poll, sleep, watch logs, or call subagents_list to detect completion, and never fabricate results. " +
+        "After spawning, end your turn or work on independent tasks (parallel spawns OK).",
       promptSnippet:
-        "Spawn a sub-agent in a dedicated terminal multiplexer pane. " +
-        "This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. " +
-        "When the sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. " +
-        "DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT call subagents_list or any other tool to 'check' status. All of that is wasted work — the harness handles delivery for you. " +
-        "DO NOT fabricate, assume, or summarize results after calling this tool. " +
-        "After spawning, either end your turn immediately, or work on other independent tasks (including spawning more subagents in parallel). The harness will wake you with the result when it is ready.",
+        "Spawn an async sub-agent; its result is delivered automatically.",
       parameters: SubagentParams,
 
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -1811,13 +1804,9 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       name: "subagent_interrupt",
       label: "Interrupt Subagent",
       description:
-        "Send Escape to the active turn of a currently running Pi-backed subagent. " +
-        "The child pane, session, watcher, and running entry remain alive; this returns only a local acknowledgement " +
-        "and does not emit a subagent_result solely because of this request.",
-      promptSnippet:
-        "Send Escape to the active turn of a currently running Pi-backed subagent. " +
-        "The child pane, session, watcher, and running entry remain alive; this returns only a local acknowledgement " +
-        "and does not emit a subagent_result solely because of this request.",
+        "Send Escape to the active turn of a running Pi-backed subagent. " +
+        "The pane, session, and watcher stay alive; returns a local acknowledgement only — no subagent_result is emitted for this.",
+      promptSnippet: "Send Escape to a running subagent's active turn.",
       parameters: Type.Object({
         id: Type.Optional(
           Type.String({ description: "Exact running subagent id" }),
@@ -1873,13 +1862,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       name: "subagents_list",
       label: "List Subagents",
       description:
-        "List all available subagent definitions. " +
-        "Scans project-local .pi/agents/ and global ~/.pi/agent/agents/. " +
-        "Project-local agents override global ones with the same name.",
-      promptSnippet:
-        "List all available subagent definitions. " +
-        "Scans project-local .pi/agents/ and global ~/.pi/agent/agents/. " +
-        "Project-local agents override global ones with the same name.",
+        "List available subagent definitions from project .pi/agents/ and global ~/.pi/agent/agents/ (project overrides global).",
+      promptSnippet: "List available subagent definitions.",
       parameters: Type.Object({}),
 
       async execute() {
@@ -1936,19 +1920,11 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       name: "subagent_resume",
       label: "Resume Subagent",
       description:
-        "Resume a previous sub-agent session in a new multiplexer pane. " +
-        "This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. " +
-        "When the resumed sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. " +
-        "DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT poll for status. All of that is wasted work — the harness handles delivery for you. " +
-        "DO NOT fabricate or assume results. After resuming, either end your turn or work on other independent tasks; the harness will wake you when the result is ready. " +
-        "Use when a sub-agent was cancelled or needs follow-up work.",
+        "Resume a previous sub-agent session in a new pane. " +
+        "Fire-and-forget like the subagent tool: returns immediately; the harness delivers the result as a steer message that wakes you — never poll for status and never fabricate results. " +
+        "Use for cancelled runs or follow-up work.",
       promptSnippet:
-        "Resume a previous sub-agent session in a new multiplexer pane. " +
-        "This is a fire-and-forget async tool: the call returns immediately with only an acknowledgement. " +
-        "When the resumed sub-agent finishes, the harness AUTOMATICALLY delivers its result as a steer message that wakes you up and starts a new turn — you do not need to do anything to receive it. " +
-        "DO NOT write polling loops, sleep/wait commands, tail/watch scripts, or repeatedly read session/log files to detect completion. DO NOT poll for status. All of that is wasted work — the harness handles delivery for you. " +
-        "DO NOT fabricate or assume results. After resuming, either end your turn or work on other independent tasks; the harness will wake you when the result is ready. " +
-        "Use when a sub-agent was cancelled or needs follow-up work.",
+        "Resume a previous sub-agent session; result delivered automatically.",
       parameters: Type.Object({
         sessionPath: Type.String({
           description: "Path to the session .jsonl file to resume",
@@ -1961,13 +1937,13 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         message: Type.Optional(
           Type.String({
             description:
-              "Optional message to send after resuming (e.g. follow-up instructions)",
+              "Message to send after resuming (e.g. follow-up instructions)",
           }),
         ),
         autoExit: Type.Optional(
           Type.Boolean({
             description:
-              "Whether the resumed session should automatically exit after completing its response. Defaults to true for autonomous follow-up work; set false for interactive resumed sessions.",
+              "Auto-exit after completing the response. Default true; set false for interactive sessions.",
           }),
         ),
       }),
