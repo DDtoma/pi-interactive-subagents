@@ -1262,16 +1262,18 @@ describe("subagent discovery", () => {
     );
   });
 
-  it("buildSubagentToolAllowlist preserves requested tools and adds child control tools", () => {
-    assert.equal(
-      testApi.buildSubagentToolAllowlist("read,bash,web_search"),
-      "read,bash,web_search,caller_ping,subagent_done",
+  it("buildToolSoftConstraint lists requested tools plus child control tools", () => {
+    const constraint = testApi.buildToolSoftConstraint("read,bash,web_search");
+    assert.ok(
+      constraint?.includes(
+        "read, bash, web_search, caller_ping, subagent_done",
+      ),
     );
   });
 
-  it("buildSubagentToolAllowlist returns null without an explicit tool restriction", () => {
-    assert.equal(testApi.buildSubagentToolAllowlist(undefined), null);
-    assert.equal(testApi.buildSubagentToolAllowlist(""), null);
+  it("buildToolSoftConstraint returns null without an explicit tool restriction", () => {
+    assert.equal(testApi.buildToolSoftConstraint(undefined), null);
+    assert.equal(testApi.buildToolSoftConstraint(""), null);
   });
 
   it("buildPiPromptArgs inserts separator for artifact-backed launches with skills", () => {
