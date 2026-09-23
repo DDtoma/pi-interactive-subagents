@@ -207,9 +207,10 @@ for (const backend of backends) {
       const task = [
         `Call the subagent tool with these EXACT parameters:`,
         `  name: "Fork-${id}"`,
+        `  agent: "general"`,
         `  fork: true`,
         `  task: "Run this bash command: echo 'FORK_OK_${id}' > '${markerFile}'"`,
-        `Do not set the agent parameter. Just set name, fork, and task.`,
+        `Do not set any other parameters. Just set name, agent, fork, and task.`,
         `After you receive the result, say FORK_COMPLETE.`,
       ].join("\n");
 

@@ -1088,11 +1088,11 @@ describe("subagent discovery", () => {
     });
   });
 
-  it("resolveEffectiveInteractive defaults to the inverse of auto-exit", () => {
+  it("resolveEffectiveInteractive defaults to the inverse of auto-exit", async () => {
     // Autonomous agents (auto-exit: true) are NOT interactive — parent gets stall pings.
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { autoExit: true },
       ),
       false,
@@ -1100,27 +1100,33 @@ describe("subagent discovery", () => {
     // Agents without auto-exit ARE interactive — parent does not receive status transition pings.
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { autoExit: false },
       ),
       true,
     );
     assert.equal(
-      testApi.resolveEffectiveInteractive({ name: "A", task: "T" }, {}),
+      testApi.resolveEffectiveInteractive({ name: "A", agent: "general", task: "T" }, {}),
       true,
     );
-    // Bare spawn with no agent defs (e.g. /iterate fork) is interactive by default.
-    assert.equal(
-      testApi.resolveEffectiveInteractive({ name: "A", task: "T" }, null),
-      true,
-    );
+    // The bundled `general` agent (ad-hoc spawns, /iterate forks) is
+    // explicitly interactive. Isolated so a user-level general.md cannot
+    // shadow the bundled file.
+    await withIsolatedAgentEnv(async () => {
+      const general = testApi.loadAgentDefaults("general");
+      assert.ok(general, "expected bundled general agent to be discoverable");
+      assert.equal(
+        testApi.resolveEffectiveInteractive({ name: "A", agent: "general", task: "T" }, general),
+        true,
+      );
+    });
   });
 
   it("resolveEffectiveInteractive honors explicit frontmatter over the auto-exit default", () => {
     // Autonomous agent that still wants to be treated as interactive.
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { autoExit: true, interactive: true },
       ),
       true,
@@ -1128,7 +1134,7 @@ describe("subagent discovery", () => {
     // Non-auto-exit agent that opts back into stall pings.
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { interactive: false },
       ),
       false,
@@ -1138,26 +1144,30 @@ describe("subagent discovery", () => {
   it("resolveEffectiveInteractive honors the explicit tool parameter over all else", () => {
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T", interactive: false },
+        { name: "A", agent: "general", task: "T", interactive: false },
         { autoExit: false, interactive: true },
       ),
       false,
     );
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "A", task: "T", interactive: true },
+        { name: "A", agent: "general", task: "T", interactive: true },
         { autoExit: true, interactive: false },
       ),
       true,
     );
   });
 
-  it("bundled scout/worker/reviewer agents resolve as non-interactive; planner resolves as interactive", () => {
-    for (const name of ["scout", "worker", "reviewer"]) {
+  // Isolate from the developer's ~/.pi/agent/agents — a user-level definition
+  // (e.g. a reviewer.md without auto-exit) shadows the bundled one and would
+  // change what these assertions resolve.
+  it("bundled scout/worker/reviewer agents resolve as non-interactive; planner and general resolve as interactive", async () => {
+    await withIsolatedAgentEnv(async () => {
+      for (const name of ["scout", "worker", "reviewer"]) {
       const defs = testApi.loadAgentDefaults(name);
       assert.ok(defs, `expected bundled agent ${name} to be discoverable`);
       assert.equal(
-        testApi.resolveEffectiveInteractive({ name, task: "" }, defs),
+        testApi.resolveEffectiveInteractive({ name, agent: name, task: "" }, defs),
         false,
         `${name} should resolve as non-interactive (autonomous)`,
       );
@@ -1167,12 +1177,43 @@ describe("subagent discovery", () => {
     assert.ok(planner, "expected bundled planner to be discoverable");
     assert.equal(
       testApi.resolveEffectiveInteractive(
-        { name: "planner", task: "" },
+        { name: "planner", agent: "planner", task: "" },
         planner,
       ),
       true,
       "planner should resolve as interactive (no auto-exit)",
     );
+
+    const general = testApi.loadAgentDefaults("general");
+    assert.ok(general, "expected bundled general to be discoverable");
+    assert.equal(
+      testApi.resolveEffectiveInteractive(
+        { name: "general", agent: "general", task: "" },
+        general,
+      ),
+      true,
+      "general should resolve as interactive (explicit interactive: true)",
+    );
+
+      // general must stay inert — any override here silently changes every
+      // ad-hoc spawn and /iterate fork (recreating the original incident).
+      assert.equal(general.model, undefined);
+      assert.equal(general.thinking, undefined);
+      assert.equal(general.tools, undefined);
+      assert.equal(general.skills, undefined);
+      assert.equal(general.denyTools, undefined);
+      assert.equal(general.cwd, undefined);
+      assert.equal(general.cli, undefined);
+      assert.equal(general.sessionMode, undefined);
+      assert.equal(general.autoExit, undefined);
+      assert.equal(general.body, undefined);
+    });
+  });
+
+  it("returns null for an unknown agent definition", async () => {
+    await withIsolatedAgentEnv(async () => {
+      assert.equal(testApi.loadAgentDefaults("no-such-agent"), null);
+    });
   });
 
   it("ignores invalid session-mode values", async () => {
@@ -1193,40 +1234,50 @@ describe("subagent discovery", () => {
     });
   });
 
-  it("resolves session mode with fork override precedence", () => {
-    assert.equal(
-      testApi.resolveEffectiveSessionMode({ name: "A", task: "T" }, null),
-      "standalone",
-    );
+  it("resolves session mode with fork override precedence", async () => {
+    // Isolated so a user-level general.md cannot shadow the bundled file.
+    await withIsolatedAgentEnv(async () => {
+      const general = testApi.loadAgentDefaults("general");
+      assert.ok(general, "expected bundled general agent to be discoverable");
+      assert.equal(
+        testApi.resolveEffectiveSessionMode({ name: "A", agent: "general", task: "T" }, general),
+        "standalone",
+      );
+    });
     assert.equal(
       testApi.resolveEffectiveSessionMode(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { sessionMode: "lineage-only" },
       ),
       "lineage-only",
     );
     assert.equal(
       testApi.resolveEffectiveSessionMode(
-        { name: "A", task: "T", fork: true },
+        { name: "A", agent: "general", task: "T", fork: true },
         { sessionMode: "lineage-only" },
       ),
       "fork",
     );
   });
 
-  it("resolves launch behavior for standalone, lineage-only, and fork modes", () => {
-    assert.deepEqual(
-      testApi.resolveLaunchBehavior({ name: "A", task: "T" }, null),
-      {
-        sessionMode: "standalone",
-        seededSessionMode: null,
-        inheritsConversationContext: false,
-        taskDelivery: "artifact",
-      },
-    );
+  it("resolves launch behavior for standalone, lineage-only, and fork modes", async () => {
+    // Isolated so a user-level general.md cannot shadow the bundled file.
+    await withIsolatedAgentEnv(async () => {
+      const general = testApi.loadAgentDefaults("general");
+      assert.ok(general, "expected bundled general agent to be discoverable");
+      assert.deepEqual(
+        testApi.resolveLaunchBehavior({ name: "A", agent: "general", task: "T" }, general),
+        {
+          sessionMode: "standalone",
+          seededSessionMode: null,
+          inheritsConversationContext: false,
+          taskDelivery: "artifact",
+        },
+      );
+    });
     assert.deepEqual(
       testApi.resolveLaunchBehavior(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { sessionMode: "lineage-only" },
       ),
       {
@@ -1238,7 +1289,7 @@ describe("subagent discovery", () => {
     );
     assert.deepEqual(
       testApi.resolveLaunchBehavior(
-        { name: "A", task: "T" },
+        { name: "A", agent: "general", task: "T" },
         { sessionMode: "fork" },
       ),
       {
@@ -1250,7 +1301,7 @@ describe("subagent discovery", () => {
     );
     assert.deepEqual(
       testApi.resolveLaunchBehavior(
-        { name: "A", task: "T", fork: true },
+        { name: "A", agent: "general", task: "T", fork: true },
         { sessionMode: "lineage-only" },
       ),
       {

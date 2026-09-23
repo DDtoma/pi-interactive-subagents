@@ -89,6 +89,7 @@ Subagent panes are created without stealing keyboard focus (cmux, tmux, herdr). 
 | **worker**        | Sonnet                 | Implements tasks from todos — writes code, runs tests, makes polished commits            |
 | **reviewer**      | Opus (medium thinking) | Reviews code for bugs, security issues, correctness                                      |
 | **visual-tester** | Sonnet                 | Visual QA via Chrome CDP — screenshots, responsive testing, interaction testing          |
+| **general**       | session default        | Ad-hoc subagent — no preset defaults, inherits the session's model, tools, and settings  |
 
 Agent discovery follows priority: **project-local** (`.pi/agents/`) > **global** (`~/.pi/agent/agents/`) > **package-bundled**. Override any bundled agent by placing your own version in the higher-priority location.
 
@@ -157,7 +158,7 @@ cp config.json.example config.json
 subagent({ name: "Scout", agent: "scout", task: "Analyze the codebase..." });
 
 // Force a full-context fork for this spawn
-subagent({ name: "Iterate", fork: true, task: "Fix the bug where..." });
+subagent({ name: "Iterate", agent: "general", fork: true, task: "Fix the bug where..." });
 
 // Agent defaults can choose a different session-mode via frontmatter
 subagent({ name: "Planner", agent: "planner", task: "Work through the design with me" });
@@ -168,18 +169,18 @@ subagent({ name: "Designer", agent: "game-designer", cwd: "agents/game-designer"
 
 ### Parameters
 
-| Parameter              | Type    | Default        | Description                                                                                       |
-| ---------------------- | ------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| `name`                 | string  | required       | Display name (shown in widget and pane title)                                                     |
-| `task`                 | string  | required       | Task prompt for the sub-agent                                                                     |
-| `agent`                | string  | —              | Load defaults from agent definition                                                               |
-| `fork`                 | boolean | `false`        | Force the full-context fork mode for this spawn, overriding any agent `session-mode` frontmatter  |
+| Parameter              | Type    | Default        | Description                                                                                                                                                        |
+| ---------------------- | ------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                 | string  | required       | Display name (shown in widget and pane title). Purely cosmetic — it does not select configuration.                                                                 |
+| `task`                 | string  | required       | Task prompt for the sub-agent                                                                                                                                      |
+| `agent`                | string  | required       | Load defaults from agent definition. The call fails if no definition file exists; use `"general"` for an ad-hoc subagent with session defaults.                    |
+| `fork`                 | boolean | `false`        | Force the full-context fork mode for this spawn, overriding any agent `session-mode` frontmatter                                                                   |
 | `interactive`          | boolean | derived        | Mark this spawn as interactive (don't wake the parent on stall/recovery). Defaults to the agent's `interactive` frontmatter, otherwise the inverse of `auto-exit`. |
-| `model`                | string  | —              | Override agent's default model                                                                    |
-| `systemPrompt`         | string  | —              | Append to system prompt                                                                           |
-| `skills`               | string  | —              | Comma-separated skill names                                                                       |
-| `tools`                | string  | —              | Comma-separated tool names                                                                        |
-| `cwd`                  | string  | —              | Working directory for the sub-agent (see [Role Folders](#role-folders))                           |
+| `model`                | string  | —              | Override agent's default model                                                                                                                                     |
+| `systemPrompt`         | string  | —              | Append to system prompt                                                                                                                                            |
+| `skills`               | string  | —              | Comma-separated skill names                                                                                                                                        |
+| `tools`                | string  | —              | Comma-separated tool names                                                                                                                                         |
+| `cwd`                  | string  | —              | Working directory for the sub-agent (see [Role Folders](#role-folders))                                                                                            |
 
 ---
 
@@ -363,7 +364,7 @@ auto-exit: true
 
 Controls whether status transitions (`stalled`, `recovered`) wake the parent session with a steer message.
 
-**Default:** the inverse of `auto-exit`. Autonomous agents (`auto-exit: true`) are non-interactive and ping the parent on stall/recovery; agents without `auto-exit` are interactive and stay quiet. Bare spawns with no agent defs (e.g. `/iterate` with `fork: true`) are treated as interactive.
+**Default:** the inverse of `auto-exit`. Autonomous agents (`auto-exit: true`) are non-interactive and ping the parent on stall/recovery; agents without `auto-exit` are interactive and stay quiet. The bundled `general` agent (ad-hoc spawns, `/iterate` forks) sets `interactive: true` explicitly.
 
 **Why it exists:** Interactive agents can run for minutes or hours while the user thinks, types, and reads in the subagent's pane. Child snapshots still update the widget, but stalled/recovered supervision messages rarely need to wake the parent for user-driven sessions. Skipping the steer keeps the parent quiet until the child actually finishes.
 
@@ -442,8 +443,8 @@ project/
 ```
 
 ```typescript
-subagent({ name: "Game Designer", cwd: "agents/game-designer", task: "Design the combat system" });
-subagent({ name: "SRE", cwd: "agents/sre", task: "Review deployment pipeline" });
+subagent({ name: "Game Designer", agent: "general", cwd: "agents/game-designer", task: "Design the combat system" });
+subagent({ name: "SRE", agent: "general", cwd: "agents/sre", task: "Review deployment pipeline" });
 ```
 
 Set a default `cwd` in agent frontmatter:

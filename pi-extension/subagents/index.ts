@@ -101,14 +101,15 @@ function getModuleAbortSignal(): AbortSignal {
 }
 
 const SubagentParams = Type.Object({
-  name: Type.String({ description: "Display name for the subagent" }),
+  name: Type.String({
+    description:
+      "Display name for the subagent (pane title, interrupt matching). Purely cosmetic — it does NOT select configuration; use `agent` for that.",
+  }),
   task: Type.String({ description: "Task/prompt for the sub-agent" }),
-  agent: Type.Optional(
-    Type.String({
-      description:
-        "Agent name for defaults (e.g. 'worker'). Reads ~/.pi/agent/agents/<name>.md.",
-    }),
-  ),
+  agent: Type.String({
+    description:
+      "Agent definition to load (e.g. 'worker'). Required. Reads .pi/agents/<name>.md, ~/.pi/agent/agents/<name>.md, or the bundled agents dir; the call fails if no definition file exists. Use 'general' for an ad-hoc subagent with session defaults. Discover available agents with subagents_list.",
+  }),
   systemPrompt: Type.Optional(
     Type.String({
       description: "Appended to system prompt (role instructions)",
@@ -198,10 +199,8 @@ const SPAWNING_TOOLS = new Set([
  * `spawning: false` expands to all SPAWNING_TOOLS.
  * `deny-tools` adds individual tool names on top.
  */
-function resolveDenyTools(agentDefs: AgentDefaults | null): Set<string> {
+function resolveDenyTools(agentDefs: AgentDefaults): Set<string> {
   const denied = new Set<string>();
-  if (!agentDefs) return denied;
-
   // spawning: false → deny all spawning tools
   if (agentDefs.spawning === false) {
     for (const t of SPAWNING_TOOLS) denied.add(t);
@@ -327,14 +326,14 @@ function discoverAgentDefinitions(): ListedAgentDefinition[] {
 
 function resolveSubagentPaths(
   params: Static<typeof SubagentParams>,
-  agentDefs: AgentDefaults | null,
+  agentDefs: AgentDefaults,
 ): {
   effectiveCwd: string | null;
   localAgentDir: string | null;
   effectiveAgentDir: string;
 } {
-  const rawCwd = params.cwd ?? agentDefs?.cwd ?? null;
-  const cwdIsFromAgent = !params.cwd && agentDefs?.cwd != null;
+  const rawCwd = params.cwd ?? agentDefs.cwd ?? null;
+  const cwdIsFromAgent = !params.cwd && agentDefs.cwd != null;
   const cwdBase = cwdIsFromAgent ? getAgentConfigDir() : process.cwd();
   const effectiveCwd = rawCwd
     ? rawCwd.startsWith("/")
@@ -362,15 +361,15 @@ function getDefaultSessionDirFor(cwd: string, agentDir: string): string {
 
 function resolveEffectiveSessionMode(
   params: Static<typeof SubagentParams>,
-  agentDefs: AgentDefaults | null,
+  agentDefs: AgentDefaults,
 ): SubagentSessionMode {
   if (params.fork) return "fork";
-  return agentDefs?.sessionMode ?? "standalone";
+  return agentDefs.sessionMode ?? "standalone";
 }
 
 function resolveLaunchBehavior(
   params: Static<typeof SubagentParams>,
-  agentDefs: AgentDefaults | null,
+  agentDefs: AgentDefaults,
 ): {
   sessionMode: SubagentSessionMode;
   seededSessionMode: "lineage-only" | "fork" | null;
@@ -399,17 +398,17 @@ function resolveLaunchBehavior(
  *      driven by the user in their own pane (planner, iterate/fork) and
  *      stall pings are noise.
  *
- * When no agent defs exist at all (bare `subagent({ name, task })` call,
- * typical for `/iterate` with `fork: true`), `autoExit` is undefined and the
- * subagent is treated as interactive — matching the intent of iterate.
+ * Agents without an `auto-exit` frontmatter field (e.g. the bundled
+ * `general` agent used by `/iterate` with `fork: true`) have `autoExit`
+ * undefined and are treated as interactive — matching the intent of iterate.
  */
 function resolveEffectiveInteractive(
   params: Static<typeof SubagentParams>,
-  agentDefs: AgentDefaults | null,
+  agentDefs: AgentDefaults,
 ): boolean {
   if (params.interactive != null) return params.interactive;
-  if (agentDefs?.interactive != null) return agentDefs.interactive;
-  return !(agentDefs?.autoExit ?? false);
+  if (agentDefs.interactive != null) return agentDefs.interactive;
+  return !(agentDefs.autoExit ?? false);
 }
 
 function loadAgentDefaults(agentName: string): AgentDefaults | null {
@@ -434,6 +433,14 @@ function formatElapsed(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}m ${s}s`;
+}
+
+/**
+ * Render the ` (agent)` tag shown next to display names. `general` is the
+ * ad-hoc fallback definition, not a real identity — don't tag it.
+ */
+function displayAgentTag(agent: string | undefined | null): string {
+  return agent && agent !== "general" ? ` (${agent})` : "";
 }
 
 /**
@@ -672,7 +679,7 @@ function renderSubagentWidgetLines(
 
   for (const agent of agents) {
     const elapsed = formatElapsedMMSS(agent.startTime);
-    const agentTag = agent.agent ? ` (${agent.agent})` : "";
+    const agentTag = displayAgentTag(agent.agent);
     const left = ` ${elapsed}  ${agent.name}${agentTag} `;
     const snapshot = classifyStatus(agent.statusState, Date.now());
     const right = statusConfig.enabled
@@ -1053,6 +1060,7 @@ function startWidgetRefresh() {
  */
 async function launchSubagent(
   params: typeof SubagentParams.static,
+  agentDefs: AgentDefaults,
   ctx: {
     sessionManager: {
       getSessionFile(): string | null;
@@ -1066,11 +1074,10 @@ async function launchSubagent(
   const startTime = Date.now();
   const id = Math.random().toString(16).slice(2, 10);
 
-  const agentDefs = params.agent ? loadAgentDefaults(params.agent) : null;
-  const effectiveModel = params.model ?? agentDefs?.model;
-  const effectiveTools = params.tools ?? agentDefs?.tools;
-  const effectiveSkills = params.skills ?? agentDefs?.skills;
-  const effectiveThinking = agentDefs?.thinking;
+  const effectiveModel = params.model ?? agentDefs.model;
+  const effectiveTools = params.tools ?? agentDefs.tools;
+  const effectiveSkills = params.skills ?? agentDefs.skills;
+  const effectiveThinking = agentDefs.thinking;
   const effectiveInteractive = resolveEffectiveInteractive(params, agentDefs);
 
   const sessionFile = ctx.sessionManager.getSessionFile();
@@ -1130,15 +1137,15 @@ async function launchSubagent(
   // Build the task message
   // Only full-context fork mode inherits prior conversation state.
   // Blank-session modes need the wrapper instructions and artifact-backed handoff.
-  const modeHint = agentDefs?.autoExit
+  const modeHint = agentDefs.autoExit
     ? "Complete your task autonomously."
     : "Complete your task. When finished, call the subagent_done tool. The user can interact with you at any time.";
-  const summaryInstruction = agentDefs?.autoExit
+  const summaryInstruction = agentDefs.autoExit
     ? "Your FINAL assistant message should summarize what you accomplished."
     : "Your FINAL assistant message (before calling subagent_done or before the user exits) should summarize what you accomplished.";
   const denySet = resolveDenyTools(agentDefs);
-  const identity = agentDefs?.body ?? params.systemPrompt ?? null;
-  const systemPromptMode = agentDefs?.systemPromptMode;
+  const identity = agentDefs.body ?? params.systemPrompt ?? null;
+  const systemPromptMode = agentDefs.systemPromptMode;
   const identityInSystemPrompt = systemPromptMode && identity;
   const roleBlock =
     identity && !identityInSystemPrompt ? `\n\n${identity}` : "";
@@ -1148,7 +1155,7 @@ async function launchSubagent(
     ? `${params.task}${toolConstraintBlock}`
     : `${roleBlock}\n\n${modeHint}${toolConstraintBlock}\n\n${params.task}\n\n${summaryInstruction}`;
   // ── Claude Code CLI path ──
-  if (agentDefs?.cli === "claude") {
+  if (agentDefs.cli === "claude") {
     const sentinelFile = `/tmp/pi-claude-${id}-done`;
     const pluginDir = join(SUBAGENTS_DIR, "plugin");
 
@@ -1286,10 +1293,14 @@ async function launchSubagent(
     envParts.push(`PI_DENY_TOOLS=${shellEscape([...denySet].join(","))}`);
   }
   envParts.push(`PI_SUBAGENT_NAME=${shellEscape(params.name)}`);
-  if (params.agent) {
+  // `general` is the ad-hoc fallback definition, not a real identity —
+  // tagging it would make the self-spawn guard block general→general
+  // delegation and show "[general]" instead of the display name in the
+  // child's tools widget.
+  if (params.agent !== "general") {
     envParts.push(`PI_SUBAGENT_AGENT=${shellEscape(params.agent)}`);
   }
-  if (agentDefs?.autoExit) {
+  if (agentDefs.autoExit) {
     envParts.push(`PI_SUBAGENT_AUTO_EXIT=1`);
   }
   envParts.push(`PI_SUBAGENT_SESSION=${shellEscape(subagentSessionFile)}`);
@@ -1599,7 +1610,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         // Prevent self-spawning (e.g. planner spawning another planner)
         const currentAgent = process.env.PI_SUBAGENT_AGENT;
-        if (params.agent && currentAgent && params.agent === currentAgent) {
+        if (currentAgent && params.agent === currentAgent) {
           return {
             content: [
               {
@@ -1608,6 +1619,31 @@ export default function subagentsExtension(pi: ExtensionAPI) {
               },
             ],
             details: { error: "self-spawn blocked" },
+          };
+        }
+
+        // The agent definition is the only source of configured defaults —
+        // fail loudly when it doesn't exist instead of silently launching
+        // with session defaults.
+        const agentDefs = loadAgentDefaults(params.agent);
+        if (!agentDefs) {
+          const available = discoverAgentDefinitions()
+            .map((d) => d.name)
+            .join(", ");
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `Error: no agent definition found for "${params.agent}". ` +
+                  `Available agents: ${available || "(none)"}. ` +
+                  `Use agent: "general" for an ad-hoc subagent with session defaults.`,
+              },
+            ],
+            details: {
+              error: "agent definition not found",
+              agent: params.agent,
+            },
           };
         }
 
@@ -1629,7 +1665,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         }
 
         // Launch the subagent (creates pane, sends command)
-        const running = await launchSubagent(params, ctx);
+        const running = await launchSubagent(params, agentDefs, ctx);
 
         // Create a separate AbortController for the watcher
         // (the tool's signal completes when we return)
@@ -1711,12 +1747,26 @@ export default function subagentsExtension(pi: ExtensionAPI) {
           });
 
         // Return immediately
+        const resolvedModel = params.model ?? agentDefs.model;
+        let agentInfo = `Agent definition "${params.agent}" loaded; `;
+        if (resolvedModel) {
+          // Only the pi CLI branch applies thinking (`model:thinking`);
+          // the claude CLI branch passes --model without it.
+          const thinkingSuffix =
+            agentDefs.cli !== "claude" && agentDefs.thinking
+              ? `:${agentDefs.thinking}`
+              : "";
+          agentInfo += `model ${resolvedModel}${thinkingSuffix}. `;
+        } else {
+          agentInfo += "no model configured, using session default. ";
+        }
         return {
           content: [
             {
               type: "text",
               text:
                 `Sub-agent "${params.name}" launched and is now running in the background. ` +
+                agentInfo +
                 `Do NOT generate or assume any results — you have no idea what the sub-agent will do or produce. ` +
                 `The results will be delivered to you automatically as a steer message when the sub-agent finishes. ` +
                 `Until then, move on to other work or tell the user you're waiting.`,
@@ -1727,6 +1777,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
             name: params.name,
             task: params.task,
             agent: params.agent,
+            agentModel: resolvedModel ?? null,
             sessionFile: running.sessionFile,
             launchScriptFile: running.launchScriptFile,
             status: "started",
@@ -2208,8 +2259,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     handler: async (args, _ctx) => {
       const task = args.trim() || "";
       const toolCall = task
-        ? `Use subagent to fork a session. fork: true, name: "Iterate", task: ${JSON.stringify(task)}`
-        : `Use subagent to fork a session. fork: true, name: "Iterate", task: "The user wants to do some hands-on work. Help them with whatever they need."`;
+        ? `Use subagent to fork a session. fork: true, agent: "general", name: "Iterate", task: ${JSON.stringify(task)}`
+        : `Use subagent to fork a session. fork: true, agent: "general", name: "Iterate", task: "The user wants to do some hands-on work. Help them with whatever they need."`;
       pi.sendUserMessage(toolCall);
     },
   });
@@ -2268,9 +2319,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
           : failed
             ? `failed (exit ${exitCode})`
             : "completed";
-        const agentTag = details.agent
-          ? theme.fg("dim", ` (${details.agent})`)
-          : "";
+        const agentTag = theme.fg("dim", displayAgentTag(details.agent));
 
         const header = `${icon} ${theme.fg("toolTitle", theme.bold(name))}${agentTag} ${theme.fg("dim", "—")} ${status} ${theme.fg("dim", `(${elapsed})`)}`;
         const rawContent =
@@ -2381,9 +2430,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     return {
       render(width: number): string[] {
         const name = details.name ?? "subagent";
-        const agentTag = details.agent
-          ? theme.fg("dim", ` (${details.agent})`)
-          : "";
+        const agentTag = theme.fg("dim", displayAgentTag(details.agent));
         const bgFn = (text: string) => theme.bg("toolSuccessBg", text);
 
         const icon = theme.fg("accent", "?");
