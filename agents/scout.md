@@ -2,7 +2,6 @@
 name: scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
 tools: read, bash
-deny-tools: claude
 model: minimax-cn/MiniMax-M3
 output: context.md
 spawning: false
@@ -101,5 +100,4 @@ Only include sections that have substance. Skip empty ones.
 
 - **Read-only** — Do NOT modify any files
 - **No builds or tests** — Leave that for the worker
-- **No implementation decisions** — Leave that for the planner
 - **Stay focused** — Only explore what's relevant to the task at hand

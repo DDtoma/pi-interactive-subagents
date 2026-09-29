@@ -1161,7 +1161,7 @@ describe("subagent discovery", () => {
   // Isolate from the developer's ~/.pi/agent/agents — a user-level definition
   // (e.g. a reviewer.md without auto-exit) shadows the bundled one and would
   // change what these assertions resolve.
-  it("bundled scout/worker/reviewer agents resolve as non-interactive; planner and general resolve as interactive", async () => {
+  it("bundled scout/worker/reviewer agents resolve as non-interactive; general resolves as interactive", async () => {
     await withIsolatedAgentEnv(async () => {
       for (const name of ["scout", "worker", "reviewer"]) {
       const defs = testApi.loadAgentDefaults(name);
@@ -1172,17 +1172,6 @@ describe("subagent discovery", () => {
         `${name} should resolve as non-interactive (autonomous)`,
       );
     }
-
-    const planner = testApi.loadAgentDefaults("planner");
-    assert.ok(planner, "expected bundled planner to be discoverable");
-    assert.equal(
-      testApi.resolveEffectiveInteractive(
-        { name: "planner", agent: "planner", task: "" },
-        planner,
-      ),
-      true,
-      "planner should resolve as interactive (no auto-exit)",
-    );
 
     const general = testApi.loadAgentDefaults("general");
     assert.ok(general, "expected bundled general to be discoverable");
@@ -1214,6 +1203,115 @@ describe("subagent discovery", () => {
     await withIsolatedAgentEnv(async () => {
       assert.equal(testApi.loadAgentDefaults("no-such-agent"), null);
     });
+  });
+
+  it("subagents.json config overrides agent fields with highest priority", async () => {
+    await withIsolatedAgentEnv(async ({ globalDir, projectAgentsDir }) => {
+      writeFileSync(
+        join(globalDir, "subagents.json"),
+        JSON.stringify({
+          agents: { worker: { model: "test-provider/config-model" } },
+        }),
+      );
+      writeFileSync(
+        join(projectAgentsDir, "worker.md"),
+        "---\nmodel: test-provider/project-model\n---\n",
+      );
+      const worker = testApi.loadAgentDefaults("worker");
+      assert.equal(worker?.model, "test-provider/config-model");
+      // Untouched fields still fall through from the bundled definition
+      assert.equal(worker?.autoExit, true);
+      // Config cannot create agents out of nothing
+      assert.equal(testApi.loadAgentDefaults("ghost-agent"), null);
+    });
+  });
+
+  it("rejects non-boolean values for boolean fields in subagents.json", async () => {
+    await withIsolatedAgentEnv(async ({ globalDir }) => {
+      writeFileSync(
+        join(globalDir, "subagents.json"),
+        JSON.stringify({ agents: { worker: { autoExit: "false" } } }),
+      );
+      assert.throws(
+        () => testApi.loadAgentDefaults("worker"),
+        /agents\.worker\.autoExit must be a boolean/,
+      );
+    });
+  });
+
+  it("higher-priority agent files override individual frontmatter fields only", async () => {
+    await withIsolatedAgentEnv(async ({ projectAgentsDir, globalAgentsDir }) => {
+      writeFileSync(
+        join(globalAgentsDir, "worker.md"),
+        "---\nmodel: test-provider/global-model\n---\n",
+      );
+      let worker = testApi.loadAgentDefaults("worker");
+      assert.ok(worker, "expected worker to be discoverable");
+      assert.equal(worker.model, "test-provider/global-model");
+      // Untouched fields fall through from the bundled definition
+      assert.equal(worker.autoExit, true);
+      assert.ok(
+        worker.body?.includes("Worker Agent"),
+        "bundled body should survive a field-level override",
+      );
+
+      writeFileSync(
+        join(projectAgentsDir, "worker.md"),
+        "---\nmodel: test-provider/project-model\n---\n",
+      );
+      worker = testApi.loadAgentDefaults("worker");
+      assert.equal(worker?.model, "test-provider/project-model");
+      assert.equal(worker?.autoExit, true);
+    });
+  });
+
+  it("keeps a hidden agent hidden when a higher layer overrides only model", async () => {
+    await withIsolatedAgentEnv(
+      async ({ projectAgentsDir, globalAgentsDir }) => {
+        writeAgentFile(
+          globalAgentsDir,
+          "partial-override-hidden-agent",
+          [
+            "name: partial-override-hidden-agent",
+            "description: Global hidden agent",
+            "model: anthropic/test-global",
+            "disable-model-invocation: true",
+          ].join("\n"),
+          "You are the hidden global agent.",
+        );
+        writeAgentFile(
+          projectAgentsDir,
+          "partial-override-hidden-agent",
+          [
+            "name: partial-override-hidden-agent",
+            "model: anthropic/test-project",
+          ].join("\n"),
+        );
+
+        const { api, registeredTools } = createMockExtensionApi();
+        (subagentsModule as any).default(api);
+        const tool = registeredTools.find(
+          (tool) => tool.name === "subagents_list",
+        );
+        assert.ok(tool, "expected subagents_list to be registered");
+
+        const result = await tool.execute();
+        const agents = result.details?.agents ?? [];
+        assert.equal(
+          agents.some(
+            (agent: any) => agent.name === "partial-override-hidden-agent",
+          ),
+          false,
+          "model-only override must not un-hide the agent",
+        );
+
+        const loaded = testApi.loadAgentDefaults(
+          "partial-override-hidden-agent",
+        );
+        assert.equal(loaded?.model, "anthropic/test-project");
+        assert.equal(loaded?.disableModelInvocation, true);
+      },
+    );
   });
 
   it("ignores invalid session-mode values", async () => {

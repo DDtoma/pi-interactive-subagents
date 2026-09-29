@@ -27,8 +27,6 @@ import {
   getMuxBackend,
   sendEscape,
   shellEscape,
-  renameCurrentTab,
-  renameWorkspace,
   readScreen,
 } from "./cmux.ts";
 
@@ -179,7 +177,6 @@ type AgentSource = "package" | "global" | "project";
 interface AgentDefinition extends AgentDefaults {
   name: string;
   description?: string;
-  disableModelInvocation: boolean;
 }
 
 interface ListedAgentDefinition extends AgentDefinition {
@@ -291,11 +288,9 @@ function parseAgentDefinition(
     cwd: getFrontmatterValue(frontmatter, "cwd"),
     cli: getFrontmatterValue(frontmatter, "cli"),
     body: body || undefined,
-    disableModelInvocation:
-      getFrontmatterValue(
-        frontmatter,
-        "disable-model-invocation",
-      )?.toLowerCase() === "true",
+    disableModelInvocation: parseOptionalBoolean(
+      getFrontmatterValue(frontmatter, "disable-model-invocation")?.toLowerCase(),
+    ),
   };
 }
 
@@ -317,8 +312,18 @@ function discoverAgentDefinitions(): ListedAgentDefinition[] {
         file.replace(/\.md$/, ""),
       );
       if (!parsed) continue;
-      agents.set(parsed.name, { ...parsed, source });
+      const existing = agents.get(parsed.name);
+      const mergedDef = existing
+        ? mergeAgentDefaults(existing, parsed)
+        : parsed;
+      agents.set(parsed.name, { ...mergedDef, source });
     }
+  }
+
+  const overrides = loadAgentConfigOverrides();
+  for (const [name, def] of agents) {
+    const override = overrides[name];
+    if (override) agents.set(name, mergeAgentDefaults(def, override));
   }
 
   return [...agents.values()];
@@ -395,7 +400,7 @@ function resolveLaunchBehavior(
  *   3. Default: the inverse of `auto-exit`. Agents that auto-exit are
  *      autonomous (scout, worker, reviewer) and the parent session should be
  *      woken on stall/recovery transitions. Agents that don't auto-exit are
- *      driven by the user in their own pane (planner, iterate/fork) and
+ *      driven by the user in their own pane (iterate/fork) and
  *      stall pings are noise.
  *
  * Agents without an `auto-exit` frontmatter field (e.g. the bundled
@@ -411,21 +416,87 @@ function resolveEffectiveInteractive(
   return !(agentDefs.autoExit ?? false);
 }
 
+/**
+ * Overlay agent defaults field-by-field: fields the higher-priority layer
+ * leaves undefined fall through to the lower layer. Lets a global/project
+ * file tweak a single frontmatter field (e.g. `model:`) without forking the
+ * whole bundled definition.
+ */
+function mergeAgentDefaults<T extends AgentDefaults>(
+  base: T,
+  overlay: AgentDefaults,
+): T {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    if (value !== undefined) {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  }
+  return merged;
+}
+
+/**
+ * JSON config overrides (`$PI_CODING_AGENT_DIR/subagents.json`), the
+ * highest-priority layer above all agent .md files:
+ *   { "agents": { "worker": { "model": "...", "thinking": "..." } } }
+ * Only overrides existing agents — it cannot create new ones. Re-read on
+ * every lookup so edits apply without /reload.
+ */
+function loadAgentConfigOverrides(): Record<string, AgentDefaults> {
+  const path = join(getAgentConfigDir(), "subagents.json");
+  if (!existsSync(path)) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(`Invalid ${path}: ${(err as Error).message}`);
+  }
+  const agents = (parsed as { agents?: unknown })?.agents;
+  if (agents == null) return {};
+  if (typeof agents !== "object" || Array.isArray(agents)) {
+    throw new Error(`Invalid ${path}: "agents" must be an object`);
+  }
+  const booleanFields = [
+    "spawning",
+    "autoExit",
+    "interactive",
+    "disableModelInvocation",
+  ] as const;
+  for (const [name, def] of Object.entries(agents)) {
+    if (def == null || typeof def !== "object" || Array.isArray(def)) {
+      throw new Error(`Invalid ${path}: agents.${name} must be an object`);
+    }
+    for (const field of booleanFields) {
+      const value = (def as Record<string, unknown>)[field];
+      if (value !== undefined && typeof value !== "boolean") {
+        throw new Error(
+          `Invalid ${path}: agents.${name}.${field} must be a boolean`,
+        );
+      }
+    }
+  }
+  return agents as Record<string, AgentDefaults>;
+}
+
 function loadAgentDefaults(agentName: string): AgentDefaults | null {
   const configDir = getAgentConfigDir();
+  // Lowest to highest priority: bundled < global < project.
   const paths = [
-    join(process.cwd(), ".pi", "agents", `${agentName}.md`),
-    join(configDir, "agents", `${agentName}.md`),
     join(getBundledAgentsDir(), `${agentName}.md`),
+    join(configDir, "agents", `${agentName}.md`),
+    join(process.cwd(), ".pi", "agents", `${agentName}.md`),
   ];
 
+  let merged: AgentDefaults | null = null;
   for (const p of paths) {
     if (!existsSync(p)) continue;
     const parsed = parseAgentDefinition(readFileSync(p, "utf8"), agentName);
-    if (parsed) return parsed;
+    if (!parsed) continue;
+    merged = merged ? mergeAgentDefaults(merged, parsed) : parsed;
   }
-
-  return null;
+  if (!merged) return null;
+  const override = loadAgentConfigOverrides()[agentName];
+  return override ? mergeAgentDefaults(merged, override) : merged;
 }
 
 function formatElapsed(seconds: number): string {
@@ -579,7 +650,7 @@ interface RunningSubagent {
    * When true, status transitions (stalled/recovered) do not wake the parent
    * session via a steer message. The widget still updates locally. Used for
    * long-running agents where the user drives the conversation in the
-   * subagent's pane (e.g. planner).
+   * subagent's pane (e.g. an /iterate fork).
    */
   interactive: boolean;
 }
@@ -1608,7 +1679,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       parameters: SubagentParams,
 
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        // Prevent self-spawning (e.g. planner spawning another planner)
+        // Prevent self-spawning (an agent spawning another instance of itself)
         const currentAgent = process.env.PI_SUBAGENT_AGENT;
         if (currentAgent && params.agent === currentAgent) {
           return {
@@ -1913,7 +1984,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       name: "subagents_list",
       label: "List Subagents",
       description:
-        "List available subagent definitions from project .pi/agents/ and global ~/.pi/agent/agents/ (project overrides global).",
+        "List available subagent definitions layered from bundled < global (~/.pi/agent/agents/) < project (.pi/agents/) < config (~/.pi/agent/subagents.json); higher layers override individual frontmatter fields.",
       promptSnippet: "List available subagent definitions.",
       parameters: Type.Object({}),
 
@@ -2464,35 +2535,5 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     };
   });
 
-  // /plan command — start the full planning workflow
-  pi.registerCommand("plan", {
-    description: "Start a planning session: /plan <what to build>",
-    handler: async (args, ctx) => {
-      const task = args.trim();
-      if (!task) {
-        ctx.ui.notify("Usage: /plan <what to build>", "warning");
-        return;
-      }
-
-      // Rename workspace and tab to show this is a planning session
-      if (isMuxAvailable()) {
-        try {
-          const label = task.length > 40 ? task.slice(0, 40) + "..." : task;
-          renameWorkspace(`🎯 ${label}`);
-          renameCurrentTab(`🎯 Plan: ${label}`);
-        } catch {
-          // non-critical -- do not block the plan
-        }
-      }
-
-      // Load the plan skill from the subagents extension directory
-      const planSkillPath = join(SUBAGENTS_DIR, "plan-skill.md");
-      let content = readFileSync(planSkillPath, "utf8");
-      content = content.replace(/^---\n[\s\S]*?\n---\n*/, "");
-      pi.sendUserMessage(
-        `<skill name="plan" location="${planSkillPath}">\n${content.trim()}\n</skill>\n\n${task}`,
-      );
-    },
-  });
 }
 // test
