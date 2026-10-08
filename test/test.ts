@@ -38,6 +38,8 @@ import {
   selectZellijStackPlacement,
   isHerdrAvailable,
   parseHerdrSplitPaneId,
+  parseHerdrTabCreatePaneId,
+  selectHerdrSplitDirection,
 } from "../pi-extension/subagents/cmux.ts";
 import {
   advanceStatusState,
@@ -2998,5 +3000,64 @@ describe("parseHerdrSplitPaneId", () => {
       () => parseHerdrSplitPaneId(""),
       /Unexpected herdr pane split output/,
     );
+  });
+});
+
+describe("parseHerdrTabCreatePaneId", () => {
+  it("extracts pane id from herdr tab create JSON output", () => {
+    const output = JSON.stringify({
+      result: { root_pane: { pane_id: "w13:p25" } },
+    });
+    assert.equal(parseHerdrTabCreatePaneId(output), "w13:p25");
+  });
+
+  it("throws on missing result.root_pane.pane_id", () => {
+    assert.throws(
+      () => parseHerdrTabCreatePaneId("{}"),
+      /missing result\.root_pane\.pane_id/,
+    );
+  });
+
+  it("throws on non-JSON output", () => {
+    assert.throws(
+      () => parseHerdrTabCreatePaneId("not json"),
+      /Unexpected herdr tab create output/,
+    );
+  });
+});
+
+describe("selectHerdrSplitDirection", () => {
+  const rect = (width: number, height: number) => ({
+    width,
+    height,
+    x: 0,
+    y: 0,
+  });
+
+  it("prefers right when both halves stay wide enough", () => {
+    assert.equal(selectHerdrSplitDirection(rect(152, 44)), "right");
+  });
+
+  it("accepts right at the exact minimum boundary", () => {
+    assert.equal(
+      selectHerdrSplitDirection(rect(100, 44), 50, 10),
+      "right",
+    );
+  });
+
+  it("falls back to down when too narrow but tall enough", () => {
+    assert.equal(selectHerdrSplitDirection(rect(60, 44), 50, 10), "down");
+  });
+
+  it("rejects down when the full width is below the minimum", () => {
+    assert.equal(selectHerdrSplitDirection(rect(40, 44), 50, 10), null);
+  });
+
+  it("returns null when neither direction fits", () => {
+    assert.equal(selectHerdrSplitDirection(rect(60, 12), 50, 10), null);
+  });
+
+  it("rejects down at one row below the minimum", () => {
+    assert.equal(selectHerdrSplitDirection(rect(60, 19), 50, 10), null);
   });
 });

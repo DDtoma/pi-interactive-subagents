@@ -638,6 +638,130 @@ function createZellijSurface(name: string): string {
   return withZellijSurfaceLock(() => createZellijSurfaceUnlocked(name));
 }
 
+// Pi subagents need more usable space than herdr's minimum pane size — a pane
+// squeezed narrower than this crashes pi's TUI on render. Tunable per session.
+const DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS = 50;
+const DEFAULT_HERDR_SUBAGENT_MIN_ROWS = 10;
+
+export interface HerdrPaneRect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Pick a split direction that leaves both halves usable, mirroring the zellij
+ * placement minimums. Returns null when neither direction fits.
+ */
+export function selectHerdrSplitDirection(
+  rect: HerdrPaneRect,
+  minColumns = DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS,
+  minRows = DEFAULT_HERDR_SUBAGENT_MIN_ROWS,
+): "right" | "down" | null {
+  if (Math.floor(rect.width / 2) >= minColumns) return "right";
+  // A down split keeps the full width, so the width itself must be usable.
+  if (rect.width >= minColumns && Math.floor(rect.height / 2) >= minRows)
+    return "down";
+  return null;
+}
+
+function readHerdrPaneRect(paneId?: string): HerdrPaneRect | null {
+  try {
+    // Untargeted `herdr pane layout` resolves the UI-focused tab, which may not
+    // be the caller's tab once the user moves focus — always target explicitly.
+    const output = execFileSync(
+      "herdr",
+      paneId
+        ? ["pane", "layout", "--pane", paneId]
+        : ["pane", "layout", "--current"],
+      { encoding: "utf8" },
+    );
+    const layout = (JSON.parse(output) as any)?.result?.layout;
+    const panes = layout?.panes;
+    if (!Array.isArray(panes)) return null;
+    // A zoomed pane's rect may describe the full tab area rather than the real
+    // split geometry — don't trust it, let the caller fall back to a tab.
+    if (layout?.zoomed) return null;
+    const entry = paneId
+      ? panes.find((pane: any) => pane?.pane_id === paneId)
+      : panes.find((pane: any) => pane?.focused);
+    const rect = entry?.rect;
+    if (
+      rect &&
+      Number.isFinite(rect.width) &&
+      Number.isFinite(rect.height)
+    ) {
+      return rect as HerdrPaneRect;
+    }
+  } catch (error) {
+    void error;
+    return null;
+  }
+  return null;
+}
+
+export function parseHerdrTabCreatePaneId(output: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    throw new Error(`Unexpected herdr tab create output: ${output}`);
+  }
+
+  const paneId = (parsed as { result?: { root_pane?: { pane_id?: unknown } } })
+    ?.result?.root_pane?.pane_id;
+  if (typeof paneId !== "string" || !paneId) {
+    throw new Error(
+      `Unexpected herdr tab create output: missing result.root_pane.pane_id in ${output}`,
+    );
+  }
+  return paneId;
+}
+
+/**
+ * Fallback when the parent pane is too small to split: give the subagent a
+ * full-width tab in the same workspace (mirrors the zellij new-tab fallback).
+ */
+function createHerdrTabSurface(name: string): string {
+  const args = ["tab", "create", "--cwd", process.cwd(), "--label", name, "--no-focus"];
+  const workspace = process.env.HERDR_WORKSPACE_ID;
+  if (workspace) args.push("--workspace", workspace);
+
+  const output = execFileSync("herdr", args, { encoding: "utf8" }).trim();
+  return parseHerdrTabCreatePaneId(output);
+}
+
+/**
+ * Create a herdr surface for a subagent: split the parent pane when it stays
+ * above the usable minimum, otherwise fall back to a full-width tab.
+ */
+function createHerdrSurface(name: string): string {
+  const fromSurface = process.env.HERDR_PANE_ID;
+  const rect = readHerdrPaneRect(fromSurface);
+  // When the pane geometry is unknown, prefer the always-safe tab over a
+  // split that might recreate a crash-width pane.
+  const direction = rect
+    ? selectHerdrSplitDirection(
+        rect,
+        envPositiveInteger(
+          "PI_SUBAGENT_HERDR_MIN_COLUMNS",
+          DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS,
+        ),
+        envPositiveInteger(
+          "PI_SUBAGENT_HERDR_MIN_ROWS",
+          DEFAULT_HERDR_SUBAGENT_MIN_ROWS,
+        ),
+      )
+    : null;
+
+  if (direction) {
+    return createHerdrSplitSurface(name, direction, fromSurface);
+  }
+
+  return createHerdrTabSurface(name);
+}
+
 export function parseHerdrSplitPaneId(output: string): string {
   let parsed: unknown;
   try {
@@ -965,7 +1089,9 @@ function createCmuxSplitSurface(
  * For cmux: the first call creates a right-split pane; subsequent calls add
  * tabs to that same pane (avoiding ever-narrower splits).
  * For zellij: chooses a tab-aware tiled or stacked placement.
- * For tmux/wezterm/herdr: falls back to split behavior.
+ * For herdr: splits the parent pane while it stays above the usable minimum,
+ * otherwise falls back to a full-width tab.
+ * For tmux/wezterm: falls back to split behavior.
  *
  * Returns an identifier (`surface:42` in cmux, `%12` in tmux, `pane:7` in zellij, `42` in wezterm, `w1:p2` in herdr).
  */
@@ -1000,7 +1126,7 @@ export function createSurface(name: string): string {
   }
 
   if (backend === "herdr") {
-    return createHerdrSplitSurface(name, "right", process.env.HERDR_PANE_ID);
+    return createHerdrSurface(name);
   }
 
   // On tmux, target the parent pi's pane so splits follow the agent, not the user's focus.
