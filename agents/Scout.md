@@ -1,8 +1,8 @@
 ---
-name: scout
+name: Scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
-tools: read, bash
-model: minimax-cn/MiniMax-M3
+tools: read, bash, write
+model: litellm/MiniMax-M3.1-Flash-Preview
 output: context.md
 spawning: false
 auto-exit: true

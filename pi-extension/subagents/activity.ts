@@ -182,6 +182,9 @@ function validateActivity(value: unknown, expectedRunningChildId: string): Activ
   ].find((error) => error != null);
   if (validationError) return invalidActivity(validationError);
 
+  // SAFETY: every field is validated individually above, so the object
+  // satisfies SubagentActivityState even though the validator signatures
+  // only narrow it to a generic record.
   return { ok: true, activity: object as unknown as SubagentActivityState };
 }
 
@@ -299,6 +302,9 @@ export function createSubagentActivityRecorder(params: {
   const runningChildId = params.runningChildId?.trim();
   const activityFile = params.activityFile?.trim();
   if (!runningChildId || !activityFile) return createNoopRecorder();
+  // Bind the narrowed value: hoisted function declarations do not inherit
+  // control-flow narrowing of a captured const.
+  const activityFilePath: string = activityFile;
 
   const now = params.now ?? (() => Date.now());
   const createdAt = now();
@@ -335,7 +341,7 @@ export function createSubagentActivityRecorder(params: {
   function flushNow(): void {
     if (disabled) return;
     try {
-      writeSubagentActivityFile(activityFile, activity);
+      writeSubagentActivityFile(activityFilePath, activity);
       lastFlushAt = now();
       failureCount = 0;
     } catch {

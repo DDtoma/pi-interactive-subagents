@@ -10,16 +10,16 @@ Call `subagent()` and it **returns immediately**. The sub-agent runs in its own 
 
 ```
 ╭─ Subagents ──────────────────────────── 2 running ─╮
-│ 00:23  Scout: Auth (scout)        active · bash 7m │
-│ 00:45  Scout: DB (scout)                waiting 2m │
+│ 00:23  Scout: Auth (Scout)        active · bash 7m │
+│ 00:45  Scout: DB (Scout)                waiting 2m │
 ╰────────────────────────────────────────────────────╯
 ```
 
 For parallel execution, just call `subagent` multiple times — they all run concurrently:
 
 ```typescript
-subagent({ name: "Scout: Auth", agent: "scout", task: "Analyze auth module" });
-subagent({ name: "Scout: DB", agent: "scout", task: "Map database schema" });
+subagent({ name: "Scout: Auth", agent: "Scout", task: "Analyze auth module" });
+subagent({ name: "Scout: DB", agent: "Scout", task: "Map database schema" });
 // Both return immediately, results steer back independently
 ```
 
@@ -83,13 +83,13 @@ Subagent panes are created without stealing keyboard focus (cmux, tmux, herdr). 
 
 | Agent             | Role                                                                                     |
 | ----------------- | ---------------------------------------------------------------------------------------- |
-| **scout**         | Fast codebase reconnaissance — maps files, patterns, conventions                         |
-| **worker**        | Implements tasks from todos — writes code, runs tests, makes polished commits            |
-| **reviewer**      | Reviews code for bugs, security issues, correctness                                      |
-| **visual-tester** | Visual QA via Chrome CDP — screenshots, responsive testing, interaction testing          |
-| **general**       | Ad-hoc subagent — no preset defaults, inherits the session's model, tools, and settings  |
+| **Scout**         | Fast codebase reconnaissance — maps files, patterns, conventions                         |
+| **Worker**        | Implements tasks from todos — writes code, runs tests, makes polished commits            |
+| **Reviewer**      | Reviews code for bugs, security issues, correctness                                      |
+| **Visual-Tester** | Visual QA via Chrome CDP — screenshots, responsive testing, interaction testing          |
+| **General**       | Ad-hoc subagent — no preset defaults, inherits the session's model, tools, and settings  |
 
-Default models are declared in each agent's frontmatter (`agents/*.md`); `general` inherits the session model.
+Default models are declared in each agent's frontmatter (`agents/*.md`); `General` inherits the session model. Agent names match case-insensitively, so `agent: "worker"` and `agent: "Worker"` load the same definition.
 
 Agent definitions are layered: **package-bundled** < **global** (`~/.pi/agent/agents/`) < **project-local** (`.pi/agents/`) < **config file** (`~/.pi/agent/subagents.json`). A higher layer overrides only the frontmatter fields it declares; the body and remaining frontmatter fall through from the lower layer.
 
@@ -98,7 +98,7 @@ To change just a bundled agent's model without touching any agent file, edit `~/
 ```json
 {
   "agents": {
-    "worker": { "model": "litellm/MiniMax-M3.1-Flash-Preview", "thinking": "max" }
+    "Worker": { "model": "litellm/MiniMax-M3.1-Flash-Preview", "thinking": "max" }
   }
 }
 ```
@@ -121,9 +121,9 @@ Multiple subagents run concurrently — each steers its result back independentl
 
 ```
 ╭─ Subagents ───────────────────────────────── 3 running ─╮
-│ 01:23  Scout: Auth (scout)            active · write 7m │
+│ 01:23  Scout: Auth (Scout)            active · write 7m │
 │ 00:45  Researcher (researcher)               stalled 4m │
-│ 00:12  Scout: DB (scout)                      starting… │
+│ 00:12  Scout: DB (Scout)                      starting… │
 ╰─────────────────────────────────────────────────────────╯
 ```
 
@@ -167,10 +167,10 @@ cp config.json.example config.json
 
 ```typescript
 // Named agent with defaults from agent definition
-subagent({ name: "Scout", agent: "scout", task: "Analyze the codebase..." });
+subagent({ name: "Scout", agent: "Scout", task: "Analyze the codebase..." });
 
 // Force a full-context fork for this spawn
-subagent({ name: "Iterate", agent: "general", fork: true, task: "Fix the bug where..." });
+subagent({ name: "Iterate", agent: "General", fork: true, task: "Fix the bug where..." });
 
 // Custom working directory
 subagent({ name: "Designer", agent: "game-designer", cwd: "agents/game-designer", task: "..." });
@@ -289,7 +289,7 @@ You are a specialized agent that does X...
 | `description` | string  | Shown in `subagents_list` output                                                                                                                                                                                                                                            |
 | `model`       | string  | Default model (e.g. `anthropic/claude-sonnet-4-6`)                                                                                                                                                                                                                          |
 | `thinking`    | string  | Thinking level: `minimal`, `medium`, `high`                                                                                                                                                                                                                                 |
-| `tools`       | string  | Comma-separated tool names the agent should restrict itself to. Soft constraint: injected into the subagent prompt, not enforced — the child always launches with the full tool set (a `--tools` allowlist conflicts with pi-fabric full code mode, which would hide the allowlisted core tools and leave the child with none)  |
+| `tools`       | string  | Comma-separated tool names the agent is restricted to. Enforced on pi subagents via `--tools` (the child only gets the named tools; `caller_ping` and `subagent_done` are always added so it can report completion). `--tools` replaces the host's whole default tool selection, so tools from `defaultTools` (e.g. `codemode`) must be listed explicitly if the agent needs them; `+name`/`-name` modifiers are rejected — name tools explicitly. MCP tools the list doesn't name stay registered but inactive: the model never sees them, and only a listed `mcp__` entry (e.g. `mcp__radius__*`) or `codemode`/`tool_search` makes them reachable. The restriction is persisted next to the session file and re-applied on `subagent_resume`. Not applied on the claude path. If you run pi-fabric in full code mode, add `fabric_exec` to the list yourself — the allowlist otherwise hides it and leaves the child with no file tools.  |
 | `skills`      | string  | Comma-separated skill names to auto-load                                                                                                                                                                                                                                    |
 | `session-mode` | string | Default child-session mode: `standalone`, `lineage-only`, or `fork` |
 | `spawning`    | boolean | Set `false` to deny all subagent-spawning tools                                                                                                                                                                                                                             |
@@ -334,12 +334,12 @@ When set to `true`, the agent session shuts down automatically as soon as the ag
 
 **When to use:**
 
-- ✅ Autonomous agents (scout, worker, reviewer) that run to completion
+- ✅ Autonomous agents (Scout, Worker, Reviewer) that run to completion
 - ❌ Interactive agents (e.g. /iterate forks) where the user drives the session
 
 ```yaml
 ---
-name: scout
+name: Scout
 auto-exit: true
 ---
 ```
@@ -367,7 +367,7 @@ name: my-agent
 Or per spawn:
 
 ```typescript
-subagent({ name: "Scout", agent: "scout", interactive: true, task: "..." });
+subagent({ name: "Scout", agent: "Scout", interactive: true, task: "..." });
 ```
 
 ---
@@ -382,7 +382,7 @@ Denies all subagent lifecycle tools (`subagent`, `subagent_interrupt`, `subagent
 
 ```yaml
 ---
-name: worker
+name: Worker
 spawning: false
 ---
 ```
@@ -402,10 +402,10 @@ deny-tools: subagent
 
 | Agent      | `spawning`  | Rationale                                    |
 | ---------- | ----------- | -------------------------------------------- |
-| worker     | `false`     | Should implement tasks, not delegate         |
+| Worker     | `false`     | Should implement tasks, not delegate         |
 | researcher | `false`     | Should research, not spawn                   |
-| reviewer   | `false`     | Should review, not spawn                     |
-| scout      | `false`     | Should gather context, not spawn             |
+| Reviewer   | `false`     | Should review, not spawn                     |
+| Scout      | `false`     | Should gather context, not spawn             |
 
 ---
 
@@ -426,8 +426,8 @@ project/
 ```
 
 ```typescript
-subagent({ name: "Game Designer", agent: "general", cwd: "agents/game-designer", task: "Design the combat system" });
-subagent({ name: "SRE", agent: "general", cwd: "agents/sre", task: "Review deployment pipeline" });
+subagent({ name: "Game Designer", agent: "General", cwd: "agents/game-designer", task: "Design the combat system" });
+subagent({ name: "SRE", agent: "General", cwd: "agents/sre", task: "Review deployment pipeline" });
 ```
 
 Set a default `cwd` in agent frontmatter:
@@ -447,8 +447,8 @@ spawning: false
 Every sub-agent session displays a compact tools widget showing available and denied tools. Toggle with `Ctrl+J`:
 
 ```
-[scout] — 12 tools · 4 denied  (Ctrl+J)              ← collapsed
-[scout] — 12 available  (Ctrl+J to collapse)          ← expanded
+[Scout] — 12 tools · 4 denied  (Ctrl+J)              ← collapsed
+[Scout] — 12 available  (Ctrl+J to collapse)          ← expanded
   read, bash, edit, write, todo, ...
   denied: subagent, subagents_list, ...
 ```

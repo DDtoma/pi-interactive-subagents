@@ -1,10 +1,10 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
-import { keyHint } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "@sinclair/typebox";
-import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -106,7 +106,7 @@ const SubagentParams = Type.Object({
   task: Type.String({ description: "Task/prompt for the sub-agent" }),
   agent: Type.String({
     description:
-      "Agent definition to load (e.g. 'worker'). Required. Reads .pi/agents/<name>.md, ~/.pi/agent/agents/<name>.md, or the bundled agents dir; the call fails if no definition file exists. Use 'general' for an ad-hoc subagent with session defaults. Discover available agents with subagents_list.",
+      "Agent definition to load (e.g. 'Worker'). Required. Reads .pi/agents/<name>.md, ~/.pi/agent/agents/<name>.md, or the bundled agents dir; the call fails if no definition file exists. Use 'General' for an ad-hoc subagent with session defaults. Names match case-insensitively. Discover available agents with subagents_list.",
   }),
   systemPrompt: Type.Optional(
     Type.String({
@@ -124,7 +124,7 @@ const SubagentParams = Type.Object({
   tools: Type.Optional(
     Type.String({
       description:
-        "Comma-separated tools to restrict to (soft prompt constraint, not enforced; overrides agent default)",
+        "Comma-separated tools to restrict to (enforced via --tools on pi subagents; not applied on the claude path; overrides agent default)",
     }),
   ),
   cwd: Type.Optional(
@@ -312,17 +312,21 @@ function discoverAgentDefinitions(): ListedAgentDefinition[] {
         file.replace(/\.md$/, ""),
       );
       if (!parsed) continue;
-      const existing = agents.get(parsed.name);
+      // Merge layers by lowercase name: a user-layer file may carry a
+      // differently-cased name than the bundled one (e.g. worker vs Worker)
+      // and must override it, not spawn a duplicate entry.
+      const key = parsed.name.toLowerCase();
+      const existing = agents.get(key);
       const mergedDef = existing
         ? mergeAgentDefaults(existing, parsed)
         : parsed;
-      agents.set(parsed.name, { ...mergedDef, source });
+      agents.set(key, { ...mergedDef, source });
     }
   }
 
   const overrides = loadAgentConfigOverrides();
   for (const [name, def] of agents) {
-    const override = overrides[name];
+    const override = findAgentOverride(overrides, name);
     if (override) agents.set(name, mergeAgentDefaults(def, override));
   }
 
@@ -475,27 +479,59 @@ function loadAgentConfigOverrides(): Record<string, AgentDefaults> {
       }
     }
   }
-  return agents as Record<string, AgentDefaults>;
+  // Keys are matched case-insensitively: agent display names may differ in
+  // case from the config keys (e.g. frontmatter "Worker" vs config "worker").
+  const normalized: Record<string, AgentDefaults> = {};
+  for (const [name, def] of Object.entries(
+    agents as Record<string, AgentDefaults>,
+  )) {
+    normalized[name.toLowerCase()] = def;
+  }
+  return normalized;
+}
+
+/** Look up a config override by agent name, case-insensitively. */
+function findAgentOverride(
+  overrides: Record<string, AgentDefaults>,
+  agentName: string,
+): AgentDefaults | undefined {
+  return overrides[agentName.toLowerCase()];
+}
+
+/**
+ * Resolve `<dir>/<agentName>.md`, falling back to a case-insensitive
+ * filename match so `agent: "worker"` and `agent: "Worker"` load the same
+ * definition regardless of how the file is named.
+ */
+function resolveAgentFile(dir: string, agentName: string): string | null {
+  const exact = join(dir, `${agentName}.md`);
+  if (existsSync(exact)) return exact;
+  if (!existsSync(dir)) return null;
+  const lower = `${agentName.toLowerCase()}.md`;
+  const match = readdirSync(dir).find(
+    (entry) => entry.toLowerCase() === lower,
+  );
+  return match ? join(dir, match) : null;
 }
 
 function loadAgentDefaults(agentName: string): AgentDefaults | null {
   const configDir = getAgentConfigDir();
   // Lowest to highest priority: bundled < global < project.
   const paths = [
-    join(getBundledAgentsDir(), `${agentName}.md`),
-    join(configDir, "agents", `${agentName}.md`),
-    join(process.cwd(), ".pi", "agents", `${agentName}.md`),
+    resolveAgentFile(getBundledAgentsDir(), agentName),
+    resolveAgentFile(join(configDir, "agents"), agentName),
+    resolveAgentFile(join(process.cwd(), ".pi", "agents"), agentName),
   ];
 
   let merged: AgentDefaults | null = null;
   for (const p of paths) {
-    if (!existsSync(p)) continue;
+    if (!p) continue;
     const parsed = parseAgentDefinition(readFileSync(p, "utf8"), agentName);
     if (!parsed) continue;
     merged = merged ? mergeAgentDefaults(merged, parsed) : parsed;
   }
   if (!merged) return null;
-  const override = loadAgentConfigOverrides()[agentName];
+  const override = findAgentOverride(loadAgentConfigOverrides(), agentName);
   return override ? mergeAgentDefaults(merged, override) : merged;
 }
 
@@ -510,8 +546,12 @@ function formatElapsed(seconds: number): string {
  * Render the ` (agent)` tag shown next to display names. `general` is the
  * ad-hoc fallback definition, not a real identity — don't tag it.
  */
+function isGeneralAgent(agent: string | undefined | null): boolean {
+  return agent?.toLowerCase() === "general";
+}
+
 function displayAgentTag(agent: string | undefined | null): string {
-  return agent && agent !== "general" ? ` (${agent})` : "";
+  return agent && !isGeneralAgent(agent) ? ` (${agent})` : "";
 }
 
 /**
@@ -811,16 +851,11 @@ function updateWidget() {
 const SUBAGENT_CONTROL_TOOLS = ["caller_ping", "subagent_done"] as const;
 
 /**
- * Build a soft tool-constraint prompt block from the effective tools list.
- *
- * Subagents always launch with the full tool set — no `--tools` allowlist.
- * The allowlist conflicts with pi-fabric full code mode (fabric hides the
- * core tools the allowlist names while the allowlist drops `fabric_exec`),
- * leaving the child with no file tools at all. Restriction is therefore a
- * behavioral contract stated in the prompt. Child control tools stay allowed
- * so the subagent can always report completion.
+ * Resolve the effective tool allowlist: the requested tools plus the child
+ * control tools, which stay allowed so the subagent can always report
+ * completion. Returns null when no restriction was requested.
  */
-function buildToolSoftConstraint(effectiveTools?: string): string | null {
+function resolveAllowedTools(effectiveTools?: string): string[] | null {
   const requested = (effectiveTools ?? "")
     .split(",")
     .map((tool) => tool.trim())
@@ -828,15 +863,40 @@ function buildToolSoftConstraint(effectiveTools?: string): string | null {
 
   if (requested.length === 0) return null;
 
+  // pi's +name/-name modifiers amend the child's default tool selection — a
+  // config-layering concern, not a restriction. This list is absolute.
+  const modifier = requested.find((tool) => /^[+-]/.test(tool));
+  if (modifier) {
+    throw new Error(
+      `Invalid tools entry "${modifier}": +name/-name modifiers are not ` +
+        `supported in agent tools. Name tools explicitly, or set defaultTools ` +
+        `in the child pi's settings instead.`,
+    );
+  }
+
   const allow = new Set(requested);
   for (const tool of SUBAGENT_CONTROL_TOOLS) {
     allow.add(tool);
   }
+  return [...allow];
+}
 
-  return (
-    `Tool constraint: use ONLY these tools: ${[...allow].join(", ")}. ` +
-    `Other tools remain available in this session but are off-limits for your task — do not call them.`
-  );
+/**
+ * Build the pi CLI arguments enforcing the tool allowlist, or an empty array
+ * when no restriction was requested. The list always includes the child
+ * control tools so the subagent can report completion. MCP tools the list
+ * doesn't name stay registered but inactive — pi never declares them to the
+ * model; only codemode/tool_search can reach them.
+ */
+function buildPiToolArgs(effectiveTools?: string): string[] {
+  const allow = resolveAllowedTools(effectiveTools);
+  if (!allow) return [];
+  return ["--tools", allow.join(",")];
+}
+
+/** Sidecar next to a session file holding the spawn-time tools restriction. */
+function getToolsSidecarFile(sessionFile: string): string {
+  return `${sessionFile}.tools`;
 }
 
 function buildPiPromptArgs(params: {
@@ -963,7 +1023,10 @@ function requestSubagentInterrupt(
 function handleSubagentInterrupt(
   params: { id?: string; name?: string },
   sendEscapeKey: (surface: string) => void = sendEscape,
-) {
+): {
+  content: { type: "text"; text: string }[];
+  details: { error?: string; id?: string; name?: string; status?: string };
+} {
   const resolved = resolveInterruptTarget(params);
   if ("error" in resolved) {
     return {
@@ -1100,7 +1163,11 @@ export const __test__ = {
   resolveEffectiveSessionMode,
   resolveLaunchBehavior,
   resolveEffectiveInteractive,
-  buildToolSoftConstraint,
+  resolveAllowedTools,
+  buildPiToolArgs,
+  getToolsSidecarFile,
+  isGeneralAgent,
+  findAgentOverride,
   buildPiPromptArgs,
   formatWidgetRightLabel,
   observeRunningSubagent,
@@ -1134,7 +1201,7 @@ async function launchSubagent(
   agentDefs: AgentDefaults,
   ctx: {
     sessionManager: {
-      getSessionFile(): string | null;
+      getSessionFile(): string | null | undefined;
       getSessionId(): string;
       getSessionDir(): string;
     };
@@ -1147,6 +1214,12 @@ async function launchSubagent(
 
   const effectiveModel = params.model ?? agentDefs.model;
   const effectiveTools = params.tools ?? agentDefs.tools;
+  // Validate the allowlist before any pane is created — an invalid list would
+  // exit the child pi at launch and orphan the pane. Only the pi path
+  // enforces tools; the claude path ignores the field.
+  if (agentDefs.cli !== "claude") {
+    resolveAllowedTools(effectiveTools);
+  }
   const effectiveSkills = params.skills ?? agentDefs.skills;
   const effectiveThinking = agentDefs.thinking;
   const effectiveInteractive = resolveEffectiveInteractive(params, agentDefs);
@@ -1220,11 +1293,9 @@ async function launchSubagent(
   const identityInSystemPrompt = systemPromptMode && identity;
   const roleBlock =
     identity && !identityInSystemPrompt ? `\n\n${identity}` : "";
-  const toolConstraint = buildToolSoftConstraint(effectiveTools);
-  const toolConstraintBlock = toolConstraint ? `\n\n${toolConstraint}` : "";
   const fullTask = inheritsConversationContext
-    ? `${params.task}${toolConstraintBlock}`
-    : `${roleBlock}\n\n${modeHint}${toolConstraintBlock}\n\n${params.task}\n\n${summaryInstruction}`;
+    ? params.task
+    : `${roleBlock}\n\n${modeHint}\n\n${params.task}\n\n${summaryInstruction}`;
   // ── Claude Code CLI path ──
   if (agentDefs.cli === "claude") {
     const sentinelFile = `/tmp/pi-claude-${id}-done`;
@@ -1313,6 +1384,19 @@ async function launchSubagent(
   const subagentDonePath = join(SUBAGENTS_DIR, "subagent-done.ts");
   parts.push("-e", shellEscape(subagentDonePath));
 
+  // Enforce the tools allowlist: the child only gets the named tools plus
+  // the control tools (always added by resolveAllowedTools).
+  const toolArgs = buildPiToolArgs(effectiveTools);
+  for (let i = 0; i + 1 < toolArgs.length; i += 2) {
+    parts.push(toolArgs[i], shellEscape(toolArgs[i + 1]));
+  }
+
+  // Persist the restriction next to the session so subagent_resume can
+  // re-apply it — resume has no agent definition to resolve the list from.
+  if (effectiveTools?.trim()) {
+    writeFileSync(getToolsSidecarFile(subagentSessionFile), effectiveTools, "utf8");
+  }
+
   if (effectiveModel) {
     const model = effectiveThinking
       ? `${effectiveModel}:${effectiveThinking}`
@@ -1368,7 +1452,7 @@ async function launchSubagent(
   // tagging it would make the self-spawn guard block general→general
   // delegation and show "[general]" instead of the display name in the
   // child's tools widget.
-  if (params.agent !== "general") {
+  if (!isGeneralAgent(params.agent)) {
     envParts.push(`PI_SUBAGENT_AGENT=${shellEscape(params.agent)}`);
   }
   if (agentDefs.autoExit) {
@@ -1681,7 +1765,10 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         // Prevent self-spawning (an agent spawning another instance of itself)
         const currentAgent = process.env.PI_SUBAGENT_AGENT;
-        if (currentAgent && params.agent === currentAgent) {
+        if (
+          currentAgent &&
+          params.agent?.toLowerCase() === currentAgent.toLowerCase()
+        ) {
           return {
             content: [
               {
@@ -1708,7 +1795,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
                 text:
                   `Error: no agent definition found for "${params.agent}". ` +
                   `Available agents: ${available || "(none)"}. ` +
-                  `Use agent: "general" for an ad-hoc subagent with session defaults.`,
+                  `Use agent: "General" for an ad-hoc subagent with session defaults.`,
               },
             ],
             details: {
@@ -1733,6 +1820,21 @@ export default function subagentsExtension(pi: ExtensionAPI) {
             ],
             details: { error: "no session file" },
           };
+        }
+
+        // Validate the tools allowlist before launch — an invalid list would
+        // exit the child pi at startup. Only the pi path enforces tools.
+        if (agentDefs.cli !== "claude") {
+          try {
+            resolveAllowedTools(params.tools ?? agentDefs.tools);
+          } catch (error) {
+            return {
+              content: [
+                { type: "text", text: `Error: ${(error as Error).message}` },
+              ],
+              details: { error: "invalid tools" },
+            };
+          }
         }
 
         // Launch the subagent (creates pane, sends command)
@@ -1912,10 +2014,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         }
 
         // Fallback (shouldn't happen)
-        const text =
-          typeof result.content[0]?.text === "string"
-            ? result.content[0].text
-            : "";
+        const first = result.content[0];
+        const text = first?.type === "text" ? first.text : "";
         return new Text(theme.fg("dim", text), 0, 0);
       },
     });
@@ -1970,10 +2070,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
           );
         }
 
-        const text =
-          typeof result.content[0]?.text === "string"
-            ? result.content[0].text
-            : "";
+        const first = result.content[0];
+        const text = first?.type === "text" ? first.text : "";
         return new Text(theme.fg("dim", text), 0, 0);
       },
     });
@@ -2095,10 +2193,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         }
 
         // Fallback
-        const text =
-          typeof result.content[0]?.text === "string"
-            ? result.content[0].text
-            : "";
+        const first = result.content[0];
+        const text = first?.type === "text" ? first.text : "";
         return new Text(theme.fg("dim", text), 0, 0);
       },
 
@@ -2138,6 +2234,21 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         // Load subagent-done extension so the agent can self-terminate if needed
         const subagentDonePath = join(SUBAGENTS_DIR, "subagent-done.ts");
         parts.push("-e", shellEscape(subagentDonePath));
+
+        // Re-apply the spawn-time tools restriction persisted next to the session.
+        let resumeTools: string | undefined;
+        try {
+          resumeTools = readFileSync(
+            getToolsSidecarFile(params.sessionPath),
+            "utf8",
+          );
+        } catch {
+          // No sidecar — the original session was unrestricted.
+        }
+        const resumeToolArgs = buildPiToolArgs(resumeTools);
+        for (let i = 0; i + 1 < resumeToolArgs.length; i += 2) {
+          parts.push(resumeToolArgs[i], shellEscape(resumeToolArgs[i + 1]));
+        }
 
         const sessionId = ctx.sessionManager.getSessionId();
         const artifactDir = getArtifactDir(
@@ -2330,8 +2441,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     handler: async (args, _ctx) => {
       const task = args.trim() || "";
       const toolCall = task
-        ? `Use subagent to fork a session. fork: true, agent: "general", name: "Iterate", task: ${JSON.stringify(task)}`
-        : `Use subagent to fork a session. fork: true, agent: "general", name: "Iterate", task: "The user wants to do some hands-on work. Help them with whatever they need."`;
+        ? `Use subagent to fork a session. fork: true, agent: "General", name: "Iterate", task: ${JSON.stringify(task)}`
+        : `Use subagent to fork a session. fork: true, agent: "General", name: "Iterate", task: "The user wants to do some hands-on work. Help them with whatever they need."`;
       pi.sendUserMessage(toolCall);
     },
   });
@@ -2373,6 +2484,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     if (!details) return undefined;
 
     return {
+      invalidate() {},
       render(width: number): string[] {
         const name = details.name ?? "subagent";
         const exitCode = details.exitCode ?? 0;
@@ -2466,6 +2578,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     if (lines.length === 0 && overflow === 0) return undefined;
 
     return {
+      invalidate() {},
       render(width: number): string[] {
         const lineWidth = Math.max(0, width - 6);
         const contentLines = [
@@ -2499,6 +2612,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
     if (!details) return undefined;
 
     return {
+      invalidate() {},
       render(width: number): string[] {
         const name = details.name ?? "subagent";
         const agentTag = theme.fg("dim", displayAgentTag(details.agent));

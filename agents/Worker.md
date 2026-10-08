@@ -1,7 +1,7 @@
 ---
-name: worker
+name: Worker
 description: Implements tasks from todos - writes code, runs tests, commits with polished messages
-tools: read, bash, write, edit
+tools: read, bash, write, edit, todo
 model: deepseek/deepseek-v4-flash
 thinking: minimal
 spawning: false

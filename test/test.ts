@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import * as subagentsModule from "../pi-extension/subagents/index.ts";
 
 import {
@@ -1124,6 +1124,50 @@ describe("subagent discovery", () => {
     });
   });
 
+  it("loadAgentDefaults resolves agent names case-insensitively", async () => {
+    await withIsolatedAgentEnv(async () => {
+      const lower = testApi.loadAgentDefaults("worker");
+      const upper = testApi.loadAgentDefaults("Worker");
+      const shouty = testApi.loadAgentDefaults("WORKER");
+      assert.ok(lower, "expected bundled worker agent to be discoverable");
+      assert.deepEqual(upper, lower);
+      assert.deepEqual(shouty, lower);
+    });
+  });
+
+  it("discoverAgentDefinitions merges layers with differently-cased names into one entry", async () => {
+    await withIsolatedAgentEnv(async ({ globalAgentsDir }) => {
+      // A global file with the old lowercase name must override the bundled
+      // Worker, not produce a duplicate entry.
+      writeFileSync(
+        join(globalAgentsDir, "worker.md"),
+        "---\nname: worker\nmodel: test/model-override\n---\n\nGlobal worker body.\n",
+        "utf8",
+      );
+      const list = testApi.discoverAgentDefinitions();
+      const workers = list.filter(
+        (a: { name: string; model?: string }) => a.name.toLowerCase() === "worker",
+      );
+      assert.equal(workers.length, 1, "expected a single merged worker entry");
+      assert.equal(workers[0].model, "test/model-override");
+    });
+  });
+
+  it("findAgentOverride matches config keys case-insensitively", () => {
+    const overrides = { worker: { model: "m" } };
+    assert.deepEqual(testApi.findAgentOverride(overrides, "Worker"), {
+      model: "m",
+    });
+    assert.equal(testApi.findAgentOverride(overrides, "scout"), undefined);
+  });
+
+  it("isGeneralAgent matches the ad-hoc agent name case-insensitively", () => {
+    assert.equal(testApi.isGeneralAgent("general"), true);
+    assert.equal(testApi.isGeneralAgent("General"), true);
+    assert.equal(testApi.isGeneralAgent("worker"), false);
+    assert.equal(testApi.isGeneralAgent(undefined), false);
+  });
+
   it("resolveEffectiveInteractive honors explicit frontmatter over the auto-exit default", () => {
     // Autonomous agent that still wants to be treated as interactive.
     assert.equal(
@@ -1158,6 +1202,20 @@ describe("subagent discovery", () => {
       ),
       true,
     );
+  });
+
+  it("bundled reviewer carries the merged specialist definition", async () => {
+    await withIsolatedAgentEnv(async () => {
+      const defs = testApi.loadAgentDefaults("reviewer");
+      assert.ok(defs, "expected bundled reviewer to be discoverable");
+      assert.equal(defs.name, "Reviewer");
+      assert.equal(defs.model, "modelnexus/qwen/qwen3.8-max");
+      assert.equal(defs.thinking, "high");
+      assert.equal(defs.tools, "read, bash");
+      assert.equal(defs.autoExit, true);
+      assert.equal(defs.spawning, false);
+      assert.equal(defs.systemPromptMode, "append");
+    });
   });
 
   // Isolate from the developer's ~/.pi/agent/agents — a user-level definition
@@ -1413,18 +1471,64 @@ describe("subagent discovery", () => {
     );
   });
 
-  it("buildToolSoftConstraint lists requested tools plus child control tools", () => {
-    const constraint = testApi.buildToolSoftConstraint("read,bash,web_search");
-    assert.ok(
-      constraint?.includes(
-        "read, bash, web_search, caller_ping, subagent_done",
-      ),
+  it("buildPiToolArgs enforces the allowlist via --tools with control tools appended", () => {
+    assert.deepEqual(testApi.buildPiToolArgs("read,bash"), [
+      "--tools",
+      "read,bash,caller_ping,subagent_done",
+    ]);
+  });
+
+  it("buildPiToolArgs dedupes control tools already in the list", () => {
+    assert.deepEqual(testApi.buildPiToolArgs("read,subagent_done"), [
+      "--tools",
+      "read,subagent_done,caller_ping",
+    ]);
+  });
+
+  it("buildPiToolArgs passes mcp__ entries through", () => {
+    assert.deepEqual(testApi.buildPiToolArgs("read,mcp__radius__*"), [
+      "--tools",
+      "read,mcp__radius__*,caller_ping,subagent_done",
+    ]);
+  });
+
+  it("buildPiToolArgs rejects +name/-name modifiers", () => {
+    assert.throws(
+      () => testApi.buildPiToolArgs("+codemode"),
+      /modifiers are not supported/,
+    );
+    assert.throws(
+      () => testApi.buildPiToolArgs("read,-write"),
+      /modifiers are not supported/,
     );
   });
 
-  it("buildToolSoftConstraint returns null without an explicit tool restriction", () => {
-    assert.equal(testApi.buildToolSoftConstraint(undefined), null);
-    assert.equal(testApi.buildToolSoftConstraint(""), null);
+  it("buildPiToolArgs returns no args without an explicit tool restriction", () => {
+    assert.deepEqual(testApi.buildPiToolArgs(undefined), []);
+    assert.deepEqual(testApi.buildPiToolArgs(""), []);
+  });
+
+  it("tools sidecar round-trips the spawn-time restriction for resume", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-subagent-sidecar-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sidecar = testApi.getToolsSidecarFile(sessionFile);
+      assert.equal(sidecar, `${sessionFile}.tools`);
+
+      // Spawn persists the restriction; resume reads it back and rebuilds
+      // the same --tools arguments.
+      writeFileSync(sidecar, "read,bash", "utf8");
+      assert.deepEqual(testApi.buildPiToolArgs(readFileSync(sidecar, "utf8")), [
+        "--tools",
+        "read,bash,caller_ping,subagent_done",
+      ]);
+
+      // A missing sidecar degrades to unrestricted.
+      rmSync(sidecar);
+      assert.deepEqual(testApi.buildPiToolArgs(undefined), []);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("buildPiPromptArgs inserts separator for artifact-backed launches with skills", () => {

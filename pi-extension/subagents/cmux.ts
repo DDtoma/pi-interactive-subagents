@@ -739,24 +739,39 @@ function createHerdrTabSurface(name: string): string {
 function createHerdrSurface(name: string): string {
   const fromSurface = process.env.HERDR_PANE_ID;
   const rect = readHerdrPaneRect(fromSurface);
+  const minColumns = envPositiveInteger(
+    "PI_SUBAGENT_HERDR_MIN_COLUMNS",
+    DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS,
+  );
+  const minRows = envPositiveInteger(
+    "PI_SUBAGENT_HERDR_MIN_ROWS",
+    DEFAULT_HERDR_SUBAGENT_MIN_ROWS,
+  );
   // When the pane geometry is unknown, prefer the always-safe tab over a
   // split that might recreate a crash-width pane.
   const direction = rect
-    ? selectHerdrSplitDirection(
-        rect,
-        envPositiveInteger(
-          "PI_SUBAGENT_HERDR_MIN_COLUMNS",
-          DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS,
-        ),
-        envPositiveInteger(
-          "PI_SUBAGENT_HERDR_MIN_ROWS",
-          DEFAULT_HERDR_SUBAGENT_MIN_ROWS,
-        ),
-      )
+    ? selectHerdrSplitDirection(rect, minColumns, minRows)
     : null;
 
   if (direction) {
-    return createHerdrSplitSurface(name, direction, fromSurface);
+    try {
+      return createHerdrSplitSurface(name, direction, fromSurface);
+    } catch (error) {
+      if (!fromSurface) throw error;
+      // Anchor pane is gone — retry against the current pane only when its
+      // geometry still fits the minimums; otherwise prefer the safe tab.
+      const currentRect = readHerdrPaneRect();
+      const currentDirection = currentRect
+        ? selectHerdrSplitDirection(currentRect, minColumns, minRows)
+        : null;
+      if (currentDirection) {
+        try {
+          return createHerdrSplitSurface(name, currentDirection);
+        } catch {
+          // Fall through to the always-safe tab.
+        }
+      }
+    }
   }
 
   return createHerdrTabSurface(name);
@@ -799,27 +814,7 @@ function createHerdrSplitSurface(
     "--no-focus",
   ];
 
-  let output: string;
-  try {
-    output = execFileSync("herdr", args, { encoding: "utf8" }).trim();
-  } catch (error) {
-    if (!fromSurface) throw error;
-    // Anchor pane is gone — fall back to splitting the current pane.
-    output = execFileSync(
-      "herdr",
-      [
-        "pane",
-        "split",
-        "--current",
-        "--direction",
-        directionArg,
-        "--cwd",
-        process.cwd(),
-        "--no-focus",
-      ],
-      { encoding: "utf8" },
-    ).trim();
-  }
+  const output = execFileSync("herdr", args, { encoding: "utf8" }).trim();
 
   const surface = parseHerdrSplitPaneId(output);
   try {
@@ -1232,7 +1227,19 @@ export function createSurfaceSplit(
   }
 
   if (backend === "herdr") {
-    return createHerdrSplitSurface(name, direction, fromSurface);
+    try {
+      return createHerdrSplitSurface(name, direction, fromSurface);
+    } catch (error) {
+      // Only a failed `herdr pane split` is retryable: a parse failure means
+      // the pane may already exist, and splitting again orphans it.
+      const splitFailed =
+        typeof error === "object" &&
+        error !== null &&
+        ("status" in error || "code" in error);
+      if (!fromSurface || !splitFailed) throw error;
+      // Anchor pane is gone — fall back to splitting the current pane.
+      return createHerdrSplitSurface(name, direction);
+    }
   }
 
   // zellij

@@ -1,11 +1,4 @@
 {
-  "packages": [
-    {
-      "source": "git:github.com/DDtoma/pi-interactive-subagents",
-      "extensions": [],
-      "skills": []
-    }
-  ],
   "skills": [
     "./skills/run-integration-tests/SKILL.md"
   ]

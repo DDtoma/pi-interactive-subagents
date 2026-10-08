@@ -1,5 +1,5 @@
 ---
-name: visual-tester
+name: Visual-Tester
 description: Visual QA tester — navigates web UIs via Chrome CDP, spots visual issues, tests interactions, produces structured reports
 tools: bash, read, write
 model: kimi-coding/k3-256k
