@@ -6,7 +6,7 @@ Async subagents for [pi](https://github.com/badlogic/pi-mono) — spawn, orchest
 
 ## How It Works
 
-Call `subagent()` and it **returns immediately**. The sub-agent runs in its own terminal pane. A live widget above the input shows all running agents with their current state — `starting`, `active`, `waiting`, `stalled`, or `running`. When a sub-agent finishes, its result is **steered back** into the main session as an async notification — triggering a new turn so the agent can process it.
+Call `subagent()` and it **returns immediately**. The sub-agent runs in its own terminal pane. A live widget above the input shows all running agents with their current state — `starting`, `active`, `waiting`, or `stalled`. When a sub-agent finishes, its result is **steered back** into the main session as an async notification — triggering a new turn so the agent can process it.
 
 ```
 ╭─ Subagents ──────────────────────────── 2 running ─╮
@@ -137,7 +137,6 @@ The widget tracks each Pi-backed sub-agent from a child-written runtime snapshot
 - `active` — the child is doing observed runtime work: agent turn, provider request, streaming, or tool execution
 - `waiting` — the child finished a turn and is intentionally open for more input or another stage
 - `stalled` — the parent has gone too long without a valid current child snapshot and can no longer trust the run is healthy
-- `running` — fallback for backends without child snapshots (e.g. Claude)
 
 These labels are no longer derived from session-file growth. Session JSONL is still used for transcript, resume, lineage, and result extraction, but Pi-backed liveness now comes from a small activity snapshot written by the child extension. A fixed internal watchdog marks a run as `stalled` when valid snapshots never appear, stop being readable, or stop matching the current child; valid long-running `active` or `waiting` states do not become `stalled` just because time passes. When a run enters `stalled` or recovers from it, the parent agent receives a steer message so it can react. All other status transitions stay in the widget only.
 
@@ -206,8 +205,6 @@ subagent_interrupt({ name: "Scout" });
 This sends Escape to the child pane, cancelling the in-progress model turn. The subagent session stays alive — the pane, session file, and background polling all remain intact. After the interrupt, the widget immediately moves the child back to `waiting`, and stale pre-interrupt snapshots are ignored. If the child starts work later, newer snapshots return it to `active`; completion, failure, and `caller_ping` still flow through normally.
 
 This is a turn-level interrupt, not a method for forcibly terminating a subagent session.
-
-> **Note:** Only Pi-backed subagents are supported. Claude-backed runs will return an error.
 
 ---
 
@@ -289,7 +286,7 @@ You are a specialized agent that does X...
 | `description` | string  | Shown in `subagents_list` output                                                                                                                                                                                                                                            |
 | `model`       | string  | Default model (e.g. `anthropic/claude-sonnet-4-6`)                                                                                                                                                                                                                          |
 | `thinking`    | string  | Thinking level: `minimal`, `medium`, `high`                                                                                                                                                                                                                                 |
-| `tools`       | string  | Comma-separated tool names the agent is restricted to. Enforced on pi subagents via `--tools` (the child only gets the named tools; `caller_ping` and `subagent_done` are always added so it can report completion). `--tools` replaces the host's whole default tool selection, so tools from `defaultTools` (e.g. `codemode`) must be listed explicitly if the agent needs them; `+name`/`-name` modifiers are rejected — name tools explicitly. MCP tools the list doesn't name stay registered but inactive: the model never sees them, and only a listed `mcp__` entry (e.g. `mcp__radius__*`) or `codemode`/`tool_search` makes them reachable. The restriction is persisted next to the session file and re-applied on `subagent_resume`. Not applied on the claude path. If you run pi-fabric in full code mode, add `fabric_exec` to the list yourself — the allowlist otherwise hides it and leaves the child with no file tools.  |
+| `tools`       | string  | Comma-separated tool names the agent is restricted to. Enforced on pi subagents via `--tools` (the child only gets the named tools; `caller_ping` and `subagent_done` are always added so it can report completion). `--tools` replaces the host's whole default tool selection, so tools from `defaultTools` (e.g. `codemode`) must be listed explicitly if the agent needs them; `+name`/`-name` modifiers are rejected — name tools explicitly. MCP tools the list doesn't name stay registered but inactive: the model never sees them, and only a listed `mcp__` entry (e.g. `mcp__radius__*`) or `codemode`/`tool_search` makes them reachable. The restriction is persisted next to the session file and re-applied on `subagent_resume`. If you run pi-fabric in full code mode, add `fabric_exec` to the list yourself — the allowlist otherwise hides it and leaves the child with no file tools.  |
 | `skills`      | string  | Comma-separated skill names to auto-load                                                                                                                                                                                                                                    |
 | `session-mode` | string | Default child-session mode: `standalone`, `lineage-only`, or `fork` |
 | `spawning`    | boolean | Set `false` to deny all subagent-spawning tools                                                                                                                                                                                                                             |
