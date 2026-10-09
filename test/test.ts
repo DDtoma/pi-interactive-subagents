@@ -1508,14 +1508,21 @@ describe("subagent discovery", () => {
     ]);
   });
 
-  it("buildPiToolArgs rejects +name/-name modifiers", () => {
-    assert.throws(
-      () => testApi.buildPiToolArgs("+codemode"),
-      /modifiers are not supported/,
-    );
+  it("buildPiToolArgs passes a pure +name/-name modifier list through as default-selection amendments", () => {
+    assert.deepEqual(testApi.buildPiToolArgs("+codemode"), [
+      "--tools",
+      "+codemode,+caller_ping,+subagent_done",
+    ]);
+    assert.deepEqual(testApi.buildPiToolArgs("+codemode,-write"), [
+      "--tools",
+      "+codemode,-write,+caller_ping,+subagent_done",
+    ]);
+  });
+
+  it("buildPiToolArgs rejects mixing plain names with +name/-name modifiers", () => {
     assert.throws(
       () => testApi.buildPiToolArgs("read,-write"),
-      /modifiers are not supported/,
+      /cannot be mixed/,
     );
   });
 

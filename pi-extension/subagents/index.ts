@@ -846,9 +846,16 @@ function updateWidget() {
 const SUBAGENT_CONTROL_TOOLS = ["caller_ping", "subagent_done"] as const;
 
 /**
- * Resolve the effective tool allowlist: the requested tools plus the child
- * control tools, which stay allowed so the subagent can always report
- * completion. Returns null when no restriction was requested.
+ * Resolve the effective tool list for the child pi's --tools flag.
+ *
+ * Mirrors the host CLI semantics (docs/cli.md):
+ * - plain names only → absolute allowlist; the control tools are appended so
+ *   the subagent can always report completion
+ * - only +name/-name modifiers → the child keeps its default tool selection
+ *   with the modifiers applied; the control tools are force-added the same way
+ * - mixing plain names and modifiers is rejected (the host CLI rejects it too)
+ *
+ * Returns null when no restriction was requested.
  */
 function resolveAllowedTools(effectiveTools?: string): string[] | null {
   const requested = (effectiveTools ?? "")
@@ -858,15 +865,19 @@ function resolveAllowedTools(effectiveTools?: string): string[] | null {
 
   if (requested.length === 0) return null;
 
-  // pi's +name/-name modifiers amend the child's default tool selection — a
-  // config-layering concern, not a restriction. This list is absolute.
-  const modifier = requested.find((tool) => /^[+-]/.test(tool));
-  if (modifier) {
+  const modifiers = requested.filter((tool) => /^[+-]/.test(tool));
+  if (modifiers.length > 0 && modifiers.length < requested.length) {
     throw new Error(
-      `Invalid tools entry "${modifier}": +name/-name modifiers are not ` +
-        `supported in agent tools. Name tools explicitly, or set defaultTools ` +
-        `in the child pi's settings instead.`,
+      `Invalid tools list: plain names and +name/-name modifiers cannot be ` +
+        `mixed. Use either an explicit allowlist or a pure modifier list that ` +
+        `amends the child's default tool selection.`,
     );
+  }
+
+  if (modifiers.length > 0) {
+    // Pure modifier list: keep the child's defaults, amend them, and make
+    // sure the control tools stay reachable.
+    return [...requested, "+caller_ping", "+subagent_done"];
   }
 
   const allow = new Set(requested);
@@ -877,9 +888,9 @@ function resolveAllowedTools(effectiveTools?: string): string[] | null {
 }
 
 /**
- * Build the pi CLI arguments enforcing the tool allowlist, or an empty array
- * when no restriction was requested. The list always includes the child
- * control tools so the subagent can report completion. MCP tools the list
+ * Build the pi CLI arguments enforcing the tool restriction, or an empty array
+ * when no restriction was requested. The list always keeps the child control
+ * tools reachable so the subagent can report completion. MCP tools the list
  * doesn't name stay registered but inactive — pi never declares them to the
  * model; only codemode/tool_search can reach them.
  */
