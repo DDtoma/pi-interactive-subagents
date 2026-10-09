@@ -89,7 +89,7 @@ Subagent panes are created without stealing keyboard focus (cmux, tmux, herdr). 
 | **Visual-Tester** | Visual QA via Chrome CDP — screenshots, responsive testing, interaction testing          |
 | **General**       | Ad-hoc subagent — no preset defaults, inherits the session's model, tools, and settings  |
 
-Default models are declared in each agent's frontmatter (`agents/*.md`); `General` inherits the session model. Agent names match case-insensitively, so `agent: "worker"` and `agent: "Worker"` load the same definition.
+Default models are declared in each agent's frontmatter (`agents/*.md`); `General` inherits the session model. These defaults are **provider aliases** (`modelnexus/…`, `litellm/…`, `kimi-coding/…`, `deepseek/…` prefixes) — if your local pi install has no such alias configured, the spawned child pi fails to resolve `--model` at startup. In that case override the model per agent via `~/.pi/agent/subagents.json` (see below). Agent names match case-insensitively, so `agent: "worker"` and `agent: "Worker"` load the same definition.
 
 Agent definitions are layered: **package-bundled** < **global** (`~/.pi/agent/agents/`) < **project-local** (`.pi/agents/`) < **config file** (`~/.pi/agent/subagents.json`). A higher layer overrides only the frontmatter fields it declares; the body and remaining frontmatter fall through from the lower layer.
 
