@@ -30,7 +30,7 @@ Run the fast unit tests first — if these fail, skip integration tests:
 node --test test/test.ts
 ```
 
-Run from the project root. All unit tests must pass (157 as of the last update). If any fail, stop and fix them before proceeding.
+Run from the project root. All unit tests must pass (146 as of the last update). If any fail, stop and fix them before proceeding.
 
 ## Step 3: Run Integration Tests
 
@@ -234,7 +234,7 @@ Print a final summary:
 ╭─────────────────────────────────────────────╮
 │ Integration Test Results                    │
 ├─────────────────────────────────────────────┤
-│ Unit tests:        157/157 ✅               │
+│ Unit tests:        146/146 ✅               │
 │ Mux surface:       8/8  ✅                  │
 │ Subagent lifecycle: 7/7  ✅                 │
 │ Session validation: X sessions verified ✅  │
