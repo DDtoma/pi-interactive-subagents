@@ -27,10 +27,10 @@ If neither mux is available, stop and tell the user to run inside cmux or tmux.
 Run the fast unit tests first — if these fail, skip integration tests:
 
 ```bash
-cd /Users/haza/Projects/pi-interactive-subagents && node --test test/test.ts
+node --test test/test.ts
 ```
 
-All 114 unit tests must pass. If any fail, stop and fix them before proceeding.
+Run from the project root. All unit tests must pass (157 as of the last update). If any fail, stop and fix them before proceeding.
 
 ## Step 3: Run Integration Tests
 
@@ -39,7 +39,7 @@ Use cmux to run the integration tests in a dedicated surface so the main session
 ```bash
 SURFACE=$(cmux new-surface --type terminal | awk '{print $2}')
 sleep 0.5
-cmux send --surface $SURFACE 'cd /Users/haza/Projects/pi-interactive-subagents && node --test --test-concurrency=1 test/integration/mux-surface.test.ts test/integration/subagent-lifecycle.test.ts 2>&1; echo __TESTS_DONE_$?__\n'
+cmux send --surface $SURFACE 'node --test --test-concurrency=1 test/integration/mux-surface.test.ts test/integration/subagent-lifecycle.test.ts 2>&1; echo __TESTS_DONE_$?__\n'
 ```
 
 `--test-concurrency=1` is required: the focus-preservation test asserts global mux state and would race against parallel suites.
@@ -234,7 +234,7 @@ Print a final summary:
 ╭─────────────────────────────────────────────╮
 │ Integration Test Results                    │
 ├─────────────────────────────────────────────┤
-│ Unit tests:        114/114 ✅               │
+│ Unit tests:        157/157 ✅               │
 │ Mux surface:       8/8  ✅                  │
 │ Subagent lifecycle: 7/7  ✅                 │
 │ Session validation: X sessions verified ✅  │
