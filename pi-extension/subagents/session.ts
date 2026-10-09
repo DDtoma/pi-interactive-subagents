@@ -1,21 +1,12 @@
 import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
-
-export interface SessionEntry {
-  type: string;
-  id: string;
-  parentId?: string;
-  [key: string]: unknown;
-}
-
-export interface MessageEntry extends SessionEntry {
-  type: "message";
-  message: {
-    role: "user" | "assistant" | "toolResult";
-    content: Array<{ type: string; text?: string; [key: string]: unknown }>;
-  };
-}
+import {
+  CURRENT_SESSION_VERSION,
+  type SessionEntry,
+  type SessionHeader,
+  type SessionMessageEntry,
+} from "@earendil-works/pi-coding-agent";
 
 export type SeededSubagentSessionMode = "lineage-only" | "fork";
 
@@ -51,9 +42,9 @@ export function seedSubagentSessionFile(params: {
   childSessionFile: string;
   childCwd: string;
 }): void {
-  const header = {
+  const header: SessionHeader = {
     type: "session",
-    version: 3,
+    version: CURRENT_SESSION_VERSION,
     id: randomUUID(),
     timestamp: new Date().toISOString(),
     cwd: params.childCwd,
@@ -72,6 +63,7 @@ function readEntries(sessionFile: string): SessionEntry[] {
   return raw
     .split("\n")
     .filter((line) => line.trim())
+    // pi-lens-ignore: ast-grep:unchecked-throwing-call
     .map((line) => JSON.parse(line) as SessionEntry);
 }
 
@@ -89,6 +81,7 @@ export function getLeafId(sessionFile: string): string | null {
 export function getNewEntries(sessionFile: string, afterLine: number): SessionEntry[] {
   const raw = readFileSync(sessionFile, "utf8");
   const lines = raw.split("\n").filter((line) => line.trim());
+  // pi-lens-ignore: ast-grep:unchecked-throwing-call
   return lines.slice(afterLine).map((line) => JSON.parse(line) as SessionEntry);
 }
 
@@ -104,10 +97,14 @@ export function findLastAssistantMessage(entries: SessionEntry[]): string | null
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
     if (entry.type !== "message") continue;
-    const msg = entry as MessageEntry;
+    const msg = entry as SessionMessageEntry;
     if (msg.message.role !== "assistant") continue;
 
-    const texts = msg.message.content
+    const content = msg.message.content as Array<{
+      type: string;
+      text?: string;
+    }>;
+    const texts = content
       .filter(
         (block) =>
           block.type === "text" && typeof block.text === "string" && block.text.trim() !== "",

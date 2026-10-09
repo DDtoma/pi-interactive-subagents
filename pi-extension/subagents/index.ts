@@ -2,7 +2,11 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { keyHint } from "@earendil-works/pi-coding-agent";
+import {
+  getAgentDir,
+  keyHint,
+  parseFrontmatter,
+} from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "@sinclair/typebox";
 import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { dirname, join } from "node:path";
@@ -14,7 +18,6 @@ import {
   existsSync,
   mkdirSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import {
   isMuxAvailable,
   muxSetupHint,
@@ -206,25 +209,32 @@ function resolveDenyTools(agentDefs: AgentDefaults): Set<string> {
   return denied;
 }
 
-/** Resolve the global agent config directory, respecting PI_CODING_AGENT_DIR. */
+/** Resolve the global agent config directory (host helper, respects PI_CODING_AGENT_DIR). */
 function getAgentConfigDir(): string {
-  return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  return getAgentDir();
 }
 
 function getBundledAgentsDir(): string {
   return join(SUBAGENTS_DIR, "../../agents");
 }
 
-function getFrontmatterValue(
-  frontmatter: string,
-  key: string,
-): string | undefined {
-  const match = frontmatter.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
-  return match ? match[1].trim() : undefined;
+function parseOptionalBoolean(
+  value: string | boolean | undefined,
+): boolean | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "boolean") return value;
+  // Quoted frontmatter values arrive as text; accept case-insensitive
+  // "true"/"false" so `spawning: False` no longer silently means false.
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return undefined;
 }
 
-function parseOptionalBoolean(value: string | undefined): boolean | undefined {
-  return value == null ? undefined : value === "true";
+function parseOptionalString(
+  value: string | undefined,
+): string | undefined {
+  return value?.trim() || undefined;
 }
 
 function parseSessionMode(
@@ -240,45 +250,47 @@ function parseAgentDefinition(
   content: string,
   fallbackName: string,
 ): AgentDefinition | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return null;
+  const { frontmatter, body } = parseFrontmatter(content);
+  if (Object.keys(frontmatter).length === 0) return null;
 
-  const frontmatter = match[1];
-  const body = content.replace(/^---\n[\s\S]*?\n---\n*/, "").trim();
-  const systemPromptMode = getFrontmatterValue(frontmatter, "system-prompt");
+  const get = (key: string): string | undefined =>
+    parseOptionalString(
+      typeof frontmatter[key] === "string" ? frontmatter[key] : undefined,
+    );
+
+  const systemPromptMode = get("system-prompt");
 
   return {
-    name: getFrontmatterValue(frontmatter, "name") ?? fallbackName,
-    description: getFrontmatterValue(frontmatter, "description"),
-    model: getFrontmatterValue(frontmatter, "model"),
-    tools: getFrontmatterValue(frontmatter, "tools"),
+    name: get("name") ?? fallbackName,
+    description: get("description"),
+    model: get("model"),
+    tools: get("tools"),
     systemPromptMode:
       systemPromptMode === "replace"
         ? "replace"
         : systemPromptMode === "append"
           ? "append"
           : undefined,
-    skills:
-      getFrontmatterValue(frontmatter, "skill") ??
-      getFrontmatterValue(frontmatter, "skills"),
-    thinking: getFrontmatterValue(frontmatter, "thinking"),
-    denyTools: getFrontmatterValue(frontmatter, "deny-tools"),
-    spawning: parseOptionalBoolean(
-      getFrontmatterValue(frontmatter, "spawning"),
-    ),
-    autoExit: parseOptionalBoolean(
-      getFrontmatterValue(frontmatter, "auto-exit"),
-    ),
-    interactive: parseOptionalBoolean(
-      getFrontmatterValue(frontmatter, "interactive"),
-    ),
-    sessionMode: parseSessionMode(
-      getFrontmatterValue(frontmatter, "session-mode"),
-    ),
-    cwd: getFrontmatterValue(frontmatter, "cwd"),
+    skills: get("skill") ?? get("skills"),
+    thinking: get("thinking"),
+    denyTools: get("deny-tools"),
+    spawning: parseOptionalBoolean(frontmatter["spawning"] as
+      | string
+      | boolean
+      | undefined),
+    autoExit: parseOptionalBoolean(frontmatter["auto-exit"] as
+      | string
+      | boolean
+      | undefined),
+    interactive: parseOptionalBoolean(frontmatter["interactive"] as
+      | string
+      | boolean
+      | undefined),
+    sessionMode: parseSessionMode(get("session-mode")),
+    cwd: get("cwd"),
     body: body || undefined,
     disableModelInvocation: parseOptionalBoolean(
-      getFrontmatterValue(frontmatter, "disable-model-invocation")?.toLowerCase(),
+      frontmatter["disable-model-invocation"] as string | boolean | undefined,
     ),
   };
 }

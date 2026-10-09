@@ -1251,6 +1251,30 @@ describe("subagent discovery", () => {
     });
   });
 
+  it("parses boolean frontmatter case-insensitively", async () => {
+    await withIsolatedAgentEnv(async ({ projectAgentsDir }) => {
+      writeAgentFile(
+        projectAgentsDir,
+        "boolean-case-test-agent",
+        [
+          "name: boolean-case-test-agent",
+          "model: anthropic/test-bool-case",
+          "spawning: False",
+          "auto-exit: TRUE",
+        ].join("\n"),
+      );
+
+      const loaded = testApi.loadAgentDefaults("boolean-case-test-agent");
+      assert.ok(loaded, "expected agent to load");
+      // `spawning: False` (Python-style casing) previously parsed as the
+      // string "False" and silently became boolean false via the strict
+      // `=== "true"` check — the opposite of the intent in some callers.
+      // With case-insensitive parsing it means spawning is denied.
+      assert.equal(loaded.spawning, false);
+      assert.equal(loaded.autoExit, true);
+    });
+  });
+
   it("returns null for an unknown agent definition", async () => {
     await withIsolatedAgentEnv(async () => {
       assert.equal(testApi.loadAgentDefaults("no-such-agent"), null);
