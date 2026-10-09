@@ -1,6 +1,6 @@
-import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { randomBytes, randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname } from "node:path";
 import {
   CURRENT_SESSION_VERSION,
   type SessionEntry,
@@ -58,23 +58,6 @@ export function seedSubagentSessionFile(params: {
   writeFileSync(params.childSessionFile, lines.join("\n") + "\n", "utf8");
 }
 
-function readEntries(sessionFile: string): SessionEntry[] {
-  const raw = readFileSync(sessionFile, "utf8");
-  return raw
-    .split("\n")
-    .filter((line) => line.trim())
-    // pi-lens-ignore: ast-grep:unchecked-throwing-call
-    .map((line) => JSON.parse(line) as SessionEntry);
-}
-
-/**
- * Return the id of the last entry in the session file (current branch point / leaf).
- */
-export function getLeafId(sessionFile: string): string | null {
-  const entries = readEntries(sessionFile);
-  return entries.length > 0 ? entries[entries.length - 1].id : null;
-}
-
 /**
  * Return entries added after `afterLine` (1-indexed count of existing entries).
  */
@@ -126,52 +109,3 @@ export function findLastAssistantMessage(entries: SessionEntry[]): string | null
   return null;
 }
 
-/**
- * Append a branch_summary entry to the session file.
- * Returns the new entry's id.
- */
-export function appendBranchSummary(
-  sessionFile: string,
-  branchPointId: string,
-  fromId: string | null,
-  summary: string,
-): string {
-  const id = randomBytes(4).toString("hex");
-  const entry = {
-    type: "branch_summary",
-    id,
-    parentId: branchPointId,
-    timestamp: new Date().toISOString(),
-    fromId: fromId ?? branchPointId,
-    summary,
-  };
-  appendFileSync(sessionFile, JSON.stringify(entry) + "\n", "utf8");
-  return id;
-}
-
-/**
- * Copy the session file to destDir for parallel worker isolation.
- * Returns the path of the copy.
- */
-export function copySessionFile(sessionFile: string, destDir: string): string {
-  const id = randomBytes(4).toString("hex");
-  const dest = join(destDir, `subagent-${id}.jsonl`);
-  copyFileSync(sessionFile, dest);
-  return dest;
-}
-
-/**
- * Read new entries from sourceFile (after afterLine), append them to targetFile.
- * Returns the appended entries.
- */
-export function mergeNewEntries(
-  sourceFile: string,
-  targetFile: string,
-  afterLine: number,
-): SessionEntry[] {
-  const entries = getNewEntries(sourceFile, afterLine);
-  for (const entry of entries) {
-    appendFileSync(targetFile, JSON.stringify(entry) + "\n", "utf8");
-  }
-  return entries;
-}

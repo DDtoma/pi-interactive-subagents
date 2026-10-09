@@ -9,12 +9,7 @@ import { Type } from "@sinclair/typebox";
 import { writeFileSync } from "node:fs";
 import { createSubagentActivityRecorder } from "./activity.ts";
 
-export function shouldMarkUserTookOver(agentStarted: boolean): boolean {
-  return agentStarted;
-}
-
 export function shouldAutoExitOnAgentEnd(
-  _userTookOver: boolean,
   messages: any[] | undefined,
 ): boolean {
   // Manual input should not strand an auto-exit subagent. If the latest agent
@@ -141,9 +136,6 @@ export default function (pi: ExtensionAPI) {
     );
   }
 
-  let userTookOver = false;
-  let agentStarted = false;
-
   // Show widget + status bar on session start
   pi.on("session_start", (_event, ctx) => {
     recorder.sessionStart();
@@ -156,10 +148,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("input", () => {
     recorder.input();
-    // Ignore the initial task message that starts an autonomous subagent.
-    // Only inputs after the first agent run has started count as user takeover.
-    if (!shouldMarkUserTookOver(agentStarted)) return;
-    userTookOver = true;
   });
 
   pi.on("before_agent_start", () => {
@@ -167,13 +155,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_start", () => {
-    agentStarted = true;
     recorder.agentStart();
   });
 
   pi.on("agent_end", (event, ctx) => {
     const messages = (event as any).messages as any[] | undefined;
-    const shouldExit = autoExit && shouldAutoExitOnAgentEnd(userTookOver, messages);
+    const shouldExit = autoExit && shouldAutoExitOnAgentEnd(messages);
 
     if (shouldExit) {
       // Surface stopReason: "error" turns (auto-retry exhausted, provider
@@ -205,11 +192,6 @@ export default function (pi: ExtensionAPI) {
     }
 
     recorder.agentEndWaiting();
-    if (autoExit) {
-      // Reset any recorded manual input marker. Auto-exit is decided by whether
-      // the latest agent turn completed normally, not by who initiated it.
-      userTookOver = false;
-    }
   });
 
   pi.on("turn_start", (event) => {

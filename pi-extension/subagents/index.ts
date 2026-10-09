@@ -656,7 +656,6 @@ interface SubagentResult {
   sessionFile?: string;
   exitCode: number;
   elapsed: number;
-  error?: string;
   /** Provider/agent error message when auto-retry exhausted (overload, rate limit, etc.). */
   errorMessage?: string;
   ping?: { name: string; message: string };
@@ -675,12 +674,6 @@ interface RunningSubagent {
   sessionFile: string;
   launchScriptFile?: string;
   activityFile?: string;
-  activity?: SubagentActivityState;
-  activityRead?: {
-    ok: boolean;
-    reason?: "missing" | "invalid" | "wrong-id";
-    error?: string;
-  };
   abortController?: AbortController;
   statusState: SubagentStatusState;
   /**
@@ -939,12 +932,7 @@ function observeRunningSubagent(
     ? readSubagentActivityFile(activityFile, running.id)
     : { ok: false, reason: "missing" };
 
-  running.activityRead = read.ok
-    ? { ok: true }
-    : { ok: false, reason: read.reason, error: read.error };
-
   if (read.ok) {
-    running.activity = read.activity;
     running.statusState = observeStatus(
       running.statusState,
       {
@@ -1529,7 +1517,6 @@ async function watchSubagent(
         summary: "Subagent cancelled.",
         exitCode: 1,
         elapsed: Math.floor((Date.now() - startTime) / 1000),
-        error: "cancelled",
         sessionFile,
       };
     }
@@ -1539,7 +1526,7 @@ async function watchSubagent(
       summary: `Subagent error: ${err?.message ?? String(err)}`,
       exitCode: 1,
       elapsed: Math.floor((Date.now() - startTime) / 1000),
-      error: err?.message ?? String(err),
+      sessionFile,
     };
   }
 }
@@ -2474,6 +2461,4 @@ export default function subagentsExtension(pi: ExtensionAPI) {
       },
     };
   });
-
 }
-// test

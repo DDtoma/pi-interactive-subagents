@@ -14,19 +14,13 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import * as subagentsModule from "../pi-extension/subagents/index.ts";
 
 import {
-  getLeafId,
   getNewEntries,
   findLastAssistantMessage,
-  appendBranchSummary,
-  copySessionFile,
-  mergeNewEntries,
   seedSubagentSessionFile,
 } from "../pi-extension/subagents/session.ts";
 
 import {
   shellEscape,
-  isCmuxAvailable,
-  isWezTermAvailable,
   parseCmuxFocusedSnapshot,
   parseCmuxFocusedSnapshotFromJson,
   parseCmuxJson,
@@ -36,7 +30,6 @@ import {
   predictZellijSplitDirection,
   selectZellijPlacement,
   selectZellijStackPlacement,
-  isHerdrAvailable,
   parseHerdrSplitPaneId,
   parseHerdrTabCreatePaneId,
   selectHerdrSplitDirection,
@@ -60,7 +53,6 @@ import {
   readSubagentActivityFile,
 } from "../pi-extension/subagents/activity.ts";
 import {
-  shouldMarkUserTookOver,
   shouldAutoExitOnAgentEnd,
   findLatestAssistantError,
 } from "../pi-extension/subagents/subagent-done.ts";
@@ -242,24 +234,6 @@ describe("session.ts", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  describe("getLeafId", () => {
-    it("returns last entry id", () => {
-      const file = createSessionFile(dir, [
-        SESSION_HEADER,
-        MODEL_CHANGE,
-        USER_MSG,
-        ASSISTANT_MSG,
-      ]);
-      assert.equal(getLeafId(file), "asst-001");
-    });
-
-    it("returns null for empty file", () => {
-      const file = join(dir, "empty.jsonl");
-      writeFileSync(file, "");
-      assert.equal(getLeafId(file), null);
-    });
-  });
-
   describe("getNewEntries", () => {
     it("returns entries after a given line", () => {
       const file = createSessionFile(dir, [
@@ -387,59 +361,6 @@ describe("session.ts", () => {
     });
   });
 
-  describe("appendBranchSummary", () => {
-    it("appends valid branch_summary entry", () => {
-      const file = createSessionFile(dir, [
-        SESSION_HEADER,
-        USER_MSG,
-        ASSISTANT_MSG,
-      ]);
-      const id = appendBranchSummary(
-        file,
-        "user-001",
-        "asst-001",
-        "The plan was created.",
-      );
-
-      assert.ok(id, "should return an id");
-      assert.equal(typeof id, "string");
-
-      // Read back and verify
-      const lines = readFileSync(file, "utf8").trim().split("\n");
-      assert.equal(lines.length, 4); // 3 original + 1 summary
-
-      const summary = JSON.parse(lines[3]);
-      assert.equal(summary.type, "branch_summary");
-      assert.equal(summary.id, id);
-      assert.equal(summary.parentId, "user-001");
-      assert.equal(summary.fromId, "asst-001");
-      assert.equal(summary.summary, "The plan was created.");
-      assert.ok(summary.timestamp);
-    });
-
-    it("uses branchPointId as fromId fallback", () => {
-      const file = createSessionFile(dir, [SESSION_HEADER]);
-      appendBranchSummary(file, "branch-pt", null, "summary");
-
-      const lines = readFileSync(file, "utf8").trim().split("\n");
-      const summary = JSON.parse(lines[1]);
-      assert.equal(summary.fromId, "branch-pt");
-    });
-  });
-
-  describe("copySessionFile", () => {
-    it("creates a copy with different path", () => {
-      const file = createSessionFile(dir, [SESSION_HEADER, USER_MSG]);
-      const copyDir = join(dir, "copies");
-      mkdirSync(copyDir, { recursive: true });
-      const copy = copySessionFile(file, copyDir);
-
-      assert.notEqual(copy, file);
-      assert.ok(copy.endsWith(".jsonl"));
-      assert.equal(readFileSync(copy, "utf8"), readFileSync(file, "utf8"));
-    });
-  });
-
   describe("seedSubagentSessionFile", () => {
     it("creates a lineage-only child session with parent linkage and no copied turns", () => {
       const parentFile = createSessionFile(dir, [
@@ -502,34 +423,6 @@ describe("session.ts", () => {
         entries.some((entry) => entry.type === "message"),
         false,
       );
-    });
-  });
-
-  describe("mergeNewEntries", () => {
-    it("appends new entries from source to target", () => {
-      // Source starts with same base (2 entries), then has 1 new entry
-      const sourceFile = join(dir, "merge-source.jsonl");
-      const targetFile = join(dir, "merge-target.jsonl");
-      writeFileSync(
-        sourceFile,
-        [SESSION_HEADER, USER_MSG, ASSISTANT_MSG]
-          .map((e) => JSON.stringify(e))
-          .join("\n") + "\n",
-      );
-      writeFileSync(
-        targetFile,
-        [SESSION_HEADER, USER_MSG].map((e) => JSON.stringify(e)).join("\n") +
-          "\n",
-      );
-
-      // Merge entries after line 2 (the shared base)
-      const merged = mergeNewEntries(sourceFile, targetFile, 2);
-      assert.equal(merged.length, 1);
-      assert.equal(merged[0].id, "asst-001");
-
-      // Target should now have 3 entries
-      const targetLines = readFileSync(targetFile, "utf8").trim().split("\n");
-      assert.equal(targetLines.length, 3);
     });
   });
 });
@@ -1725,30 +1618,20 @@ describe("subagent discovery", () => {
   });
 });
 describe("subagent-done.ts", () => {
-  describe("shouldMarkUserTookOver", () => {
-    it("ignores the initial injected task before the first agent run", () => {
-      assert.equal(shouldMarkUserTookOver(false), false);
-    });
-
-    it("treats later input as manual takeover", () => {
-      assert.equal(shouldMarkUserTookOver(true), true);
-    });
-  });
-
   describe("shouldAutoExitOnAgentEnd", () => {
     it("auto-exits after normal completion when there was no takeover", () => {
       const messages = [{ role: "assistant", stopReason: "stop" }];
-      assert.equal(shouldAutoExitOnAgentEnd(false, messages), true);
+      assert.equal(shouldAutoExitOnAgentEnd(messages), true);
     });
 
     it("auto-exits after normal completion even when the user sent the prompt", () => {
       const messages = [{ role: "assistant", stopReason: "stop" }];
-      assert.equal(shouldAutoExitOnAgentEnd(true, messages), true);
+      assert.equal(shouldAutoExitOnAgentEnd(messages), true);
     });
 
     it("stays open after Escape aborts the run", () => {
       const messages = [{ role: "assistant", stopReason: "aborted" }];
-      assert.equal(shouldAutoExitOnAgentEnd(false, messages), false);
+      assert.equal(shouldAutoExitOnAgentEnd(messages), false);
     });
 
     it("still exits when the latest turn ended with stopReason=error", () => {
@@ -1762,7 +1645,7 @@ describe("subagent-done.ts", () => {
           errorMessage: "529 overloaded",
         },
       ];
-      assert.equal(shouldAutoExitOnAgentEnd(false, messages), true);
+      assert.equal(shouldAutoExitOnAgentEnd(messages), true);
     });
   });
 
@@ -3048,28 +2931,6 @@ describe("cmux.ts", () => {
 
     it("returns null when the parent pane cannot be found", () => {
       assert.equal(selectZellijPlacement([pane({ id: 10 })], 99), null);
-    });
-  });
-
-  describe("isCmuxAvailable", () => {
-    it("returns boolean based on CMUX_SOCKET_PATH", () => {
-      // Can't easily mock env in node:test, just verify it returns a boolean
-      const result = isCmuxAvailable();
-      assert.equal(typeof result, "boolean");
-    });
-  });
-
-  describe("isWezTermAvailable", () => {
-    it("returns boolean based on WEZTERM_UNIX_SOCKET", () => {
-      const result = isWezTermAvailable();
-      assert.equal(typeof result, "boolean");
-    });
-  });
-
-  describe("isHerdrAvailable", () => {
-    it("returns boolean based on HERDR_PANE_ID", () => {
-      const result = isHerdrAvailable();
-      assert.equal(typeof result, "boolean");
     });
   });
 });

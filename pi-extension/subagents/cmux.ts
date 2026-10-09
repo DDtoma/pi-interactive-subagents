@@ -89,26 +89,6 @@ function isHerdrRuntimeAvailable(): boolean {
   return !!process.env.HERDR_PANE_ID && hasCommand("herdr");
 }
 
-export function isCmuxAvailable(): boolean {
-  return isCmuxRuntimeAvailable();
-}
-
-export function isTmuxAvailable(): boolean {
-  return isTmuxRuntimeAvailable();
-}
-
-export function isZellijAvailable(): boolean {
-  return isZellijRuntimeAvailable();
-}
-
-export function isWezTermAvailable(): boolean {
-  return isWezTermRuntimeAvailable();
-}
-
-export function isHerdrAvailable(): boolean {
-  return isHerdrRuntimeAvailable();
-}
-
 export function getMuxBackend(): MuxBackend | null {
   const pref = muxPreference();
   if (pref === "cmux") return isCmuxRuntimeAvailable() ? "cmux" : null;
@@ -158,22 +138,6 @@ function requireMuxBackend(): MuxBackend {
     );
   }
   return backend;
-}
-
-/**
- * Detect if the user's default shell is fish.
- * Fish uses $status instead of $? for exit codes.
- */
-export function isFishShell(): boolean {
-  const shell = process.env.SHELL ?? "";
-  return basename(shell) === "fish";
-}
-
-/**
- * Return the shell-appropriate exit status variable ($? for bash/zsh, $status for fish).
- */
-export function exitStatusVar(): string {
-  return isFishShell() ? "$status" : "$?";
 }
 
 export function shellEscape(s: string): string {
@@ -234,21 +198,6 @@ function zellijActionSync(args: string[], surface?: string): string {
     encoding: "utf8",
     env: zellijEnv(surface),
   });
-}
-
-async function zellijActionAsync(
-  args: string[],
-  surface?: string,
-): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "zellij",
-    zellijActionArgs(args, surface),
-    {
-      encoding: "utf8",
-      env: zellijEnv(surface),
-    },
-  );
-  return stdout;
 }
 
 /** Tracked subagent pane for cmux — reused across subagent launches. */
