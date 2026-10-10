@@ -60,6 +60,36 @@ import {
   shouldAutoExitOnAgentEnd,
   findLatestAssistantError,
 } from "../pi-extension/subagents/subagent-done.ts";
+import {
+  discoverAgentDefinitions,
+  findAgentOverride,
+  loadAgentDefaults,
+  resolveDenyTools,
+  resolveEffectiveInteractive,
+  resolveEffectiveSessionMode,
+  resolveLaunchBehavior,
+} from "../pi-extension/subagents/agents.ts";
+import {
+  borderLine,
+  renderSubagentWidgetLines,
+} from "../pi-extension/subagents/widget.ts";
+import { isGeneralAgent } from "../pi-extension/subagents/util.ts";
+
+// Helpers under test: index.ts internal exits plus the agents/widget/util
+// module APIs the __test__ bundle used to re-export.
+const testApi = {
+  ...(subagentsModule as any).__test__,
+  discoverAgentDefinitions,
+  findAgentOverride,
+  loadAgentDefaults,
+  resolveDenyTools,
+  resolveEffectiveInteractive,
+  resolveEffectiveSessionMode,
+  resolveLaunchBehavior,
+  borderLine,
+  renderSubagentWidgetLines,
+  isGeneralAgent,
+};
 
 // --- Helpers ---
 
@@ -909,8 +939,7 @@ describe("status.ts", () => {
 });
 
 describe("subagent discovery", () => {
-  const testApi = (subagentsModule as any).__test__;
-
+  
   it("loads session-mode from frontmatter", async () => {
     await withIsolatedAgentEnv(async ({ projectAgentsDir }) => {
       writeAgentFile(
@@ -1781,8 +1810,7 @@ describe("commands", () => {
 
 describe("tool registration", () => {
   it("defaults resumed subagents to auto-exit and non-interactive tracking", () => {
-    const testApi = (subagentsModule as any).__test__;
-
+    
     assert.deepEqual(testApi.resolveResumeLaunchBehavior({}), {
       autoExit: true,
       interactive: false,
@@ -1794,8 +1822,7 @@ describe("tool registration", () => {
   });
 
   it("expands spawning false to deny subagent interruption", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const denied = testApi.resolveDenyTools({ spawning: false });
+        const denied = testApi.resolveDenyTools({ spawning: false });
 
     assert.equal(denied.has("subagent"), true);
     assert.equal(denied.has("subagent_interrupt"), true);
@@ -2042,8 +2069,7 @@ describe("subagent interruption", () => {
   });
 
   it("resolves interrupt targets by exact id and reports name ambiguity", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const runningMap = testApi.runningSubagents as Map<string, any>;
+        const runningMap = testApi.runningSubagents as Map<string, any>;
     runningMap.clear();
 
     try {
@@ -2086,8 +2112,7 @@ describe("subagent interruption", () => {
   });
 
   it("returns an explicit error when Escape delivery fails", () => {
-    const testApi = (subagentsModule as any).__test__;
-    let aborted = false;
+        let aborted = false;
     const running = makeRunning({
       abortController: {
         abort() {
@@ -2106,8 +2131,7 @@ describe("subagent interruption", () => {
   });
 
   it("leaves status unchanged when Escape delivery fails in the tool path", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const runningMap = testApi.runningSubagents as Map<string, any>;
+        const runningMap = testApi.runningSubagents as Map<string, any>;
     runningMap.clear();
 
     const activeState = observeStatus(
@@ -2145,8 +2169,7 @@ describe("subagent interruption", () => {
   });
 
   it("sends Escape without aborting or mutating running state", () => {
-    const testApi = (subagentsModule as any).__test__;
-    let aborted = false;
+        let aborted = false;
     let sentSurface = "";
     const running = makeRunning({
       abortController: {
@@ -2170,8 +2193,7 @@ describe("subagent interruption", () => {
   });
 
   it("refreshes the latest activity snapshot before forcing local interrupt waiting", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const runningMap = testApi.runningSubagents as Map<string, any>;
+        const runningMap = testApi.runningSubagents as Map<string, any>;
     let sentSurface = "";
     runningMap.clear();
 
@@ -2229,8 +2251,7 @@ describe("subagent interruption", () => {
   });
 
   it("acknowledges Pi-backed interrupt requests and forces local status waiting", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const runningMap = testApi.runningSubagents as Map<string, any>;
+        const runningMap = testApi.runningSubagents as Map<string, any>;
     let sentSurface = "";
     runningMap.clear();
 
@@ -2281,8 +2302,7 @@ describe("subagent interruption", () => {
   });
 
   it("sends Escape again for repeated interrupt requests", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const runningMap = testApi.runningSubagents as Map<string, any>;
+        const runningMap = testApi.runningSubagents as Map<string, any>;
     const surfaces: string[] = [];
     runningMap.clear();
 
@@ -2304,8 +2324,7 @@ describe("subagent interruption", () => {
   });
 
   it("formats exit code 130 as an ordinary failure", () => {
-    const testApi = (subagentsModule as any).__test__;
-    const presentation = testApi.resolveResultPresentation(
+        const presentation = testApi.resolveResultPresentation(
       {
         exitCode: 130,
         elapsed: 61,
@@ -2326,8 +2345,7 @@ describe("subagent interruption", () => {
     // quickly. With the error sidecar plumbed through, the presentation
     // must call out the failure, include the underlying error, and tell the
     // orchestrator how to recover.
-    const testApi = (subagentsModule as any).__test__;
-    const presentation = testApi.resolveResultPresentation(
+        const presentation = testApi.resolveResultPresentation(
       {
         exitCode: 1,
         elapsed: 14,
@@ -2445,8 +2463,7 @@ describe("subagent status renderer", () => {
 
 describe("subagent startup delay", () => {
   it("defaults to 500ms when no env var is set", () => {
-    const testApi = (subagentsModule as any).__test__;
-    assert.ok(testApi, "expected subagents test helpers to be exported");
+        assert.ok(testApi, "expected subagents test helpers to be exported");
     assert.equal(typeof testApi.getShellReadyDelayMs, "function");
 
     const original = process.env.PI_SUBAGENT_SHELL_READY_DELAY_MS;
@@ -2460,8 +2477,7 @@ describe("subagent startup delay", () => {
   });
 
   it("uses PI_SUBAGENT_SHELL_READY_DELAY_MS when it is set", () => {
-    const testApi = (subagentsModule as any).__test__;
-    assert.ok(testApi, "expected subagents test helpers to be exported");
+        assert.ok(testApi, "expected subagents test helpers to be exported");
     assert.equal(typeof testApi.getShellReadyDelayMs, "function");
 
     const original = process.env.PI_SUBAGENT_SHELL_READY_DELAY_MS;
@@ -2476,8 +2492,7 @@ describe("subagent startup delay", () => {
 });
 describe("subagents widget rendering", () => {
   it("keeps every rendered line within a very narrow width", () => {
-    const testApi = (subagentsModule as any).__test__;
-    assert.ok(testApi, "expected subagents test helpers to be exported");
+        assert.ok(testApi, "expected subagents test helpers to be exported");
     assert.equal(typeof testApi.renderSubagentWidgetLines, "function");
 
     const originalNow = Date.now;
@@ -2535,8 +2550,7 @@ describe("subagents widget rendering", () => {
   });
 
   it("truncates the right-hand status instead of overflowing when it alone is too wide", () => {
-    const testApi = (subagentsModule as any).__test__;
-    assert.ok(testApi, "expected subagents test helpers to be exported");
+        assert.ok(testApi, "expected subagents test helpers to be exported");
     assert.equal(typeof testApi.borderLine, "function");
 
     const line = testApi.borderLine(" A ", " 999 msgs (999.9KB) ", 16);
@@ -2544,8 +2558,7 @@ describe("subagents widget rendering", () => {
   });
 
   it("handles ultra-narrow widths without exceeding the width contract", () => {
-    const testApi = (subagentsModule as any).__test__;
-    assert.ok(testApi, "expected subagents test helpers to be exported");
+        assert.ok(testApi, "expected subagents test helpers to be exported");
     assert.equal(typeof testApi.renderSubagentWidgetLines, "function");
 
     const widths = [0, 1, 2];

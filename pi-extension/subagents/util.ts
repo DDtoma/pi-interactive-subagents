@@ -17,3 +17,13 @@ export function slugifyName(name: string, fallback = "subagent"): string {
       .replace(/^-|-$/g, "") || fallback
   );
 }
+
+/** `general` is the ad-hoc fallback definition, not a real identity. */
+export function isGeneralAgent(agent: string | undefined | null): boolean {
+  return agent?.toLowerCase() === "general";
+}
+
+/** Render the ` (agent)` tag shown next to display names; `general` gets none. */
+export function displayAgentTag(agent: string | undefined | null): string {
+  return agent && !isGeneralAgent(agent) ? ` (${agent})` : "";
+}
