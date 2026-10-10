@@ -39,7 +39,7 @@ import {
   formatStatusAggregate,
   formatTransitionLine,
   observeStatus,
-  loadStatusConfig,
+  getStatusConfig,
 } from "./status.ts";
 import {
   activityLabel,
@@ -199,7 +199,7 @@ function getArtifactDir(sessionDir: string, sessionId: string): string {
   return join(sessionDir, "artifacts", sessionId);
 }
 
-const statusConfig = loadStatusConfig();
+const statusConfig = getStatusConfig();
 
 function resolveResultPresentation(
   result: Pick<

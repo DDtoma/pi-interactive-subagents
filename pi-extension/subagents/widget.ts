@@ -5,13 +5,13 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   classifyStatus,
-  loadStatusConfig,
+  getStatusConfig,
   type StatusSnapshot,
   type SubagentStatusState,
 } from "./status.ts";
 import { displayAgentTag } from "./util.ts";
 
-const statusConfig = loadStatusConfig();
+const statusConfig = getStatusConfig();
 
 /** Widget row for one running subagent. */
 export interface WidgetAgent {

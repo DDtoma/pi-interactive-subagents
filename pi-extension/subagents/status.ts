@@ -187,6 +187,14 @@ export function loadStatusConfig(
   return parseStatusConfig(parsed, sourcePath);
 }
 
+let sharedStatusConfig: StatusConfig | null = null;
+
+/** Process-wide status config from the default paths, loaded once. */
+export function getStatusConfig(): StatusConfig {
+  if (!sharedStatusConfig) sharedStatusConfig = loadStatusConfig();
+  return sharedStatusConfig;
+}
+
 function formatElapsedDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   if (totalSeconds < 60) return `${totalSeconds}s`;
