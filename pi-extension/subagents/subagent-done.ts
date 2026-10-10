@@ -8,6 +8,7 @@ import { Box, Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { writeFileSync } from "node:fs";
 import { createSubagentActivityRecorder } from "./activity.ts";
+import { parseCommaList } from "./util.ts";
 
 export function shouldAutoExitOnAgentEnd(
   messages: any[] | undefined,
@@ -61,13 +62,6 @@ export function findLatestAssistantError(
     };
   }
   return null;
-}
-
-export function parseDeniedTools(rawValue: string | undefined): string[] {
-  return (rawValue ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -141,7 +135,7 @@ export default function (pi: ExtensionAPI) {
     recorder.sessionStart();
     const tools = pi.getAllTools();
     toolNames = tools.map((t) => t.name).sort();
-    denied = parseDeniedTools(deniedToolsValue);
+    denied = parseCommaList(deniedToolsValue);
 
     renderWidget(ctx, null);
   });

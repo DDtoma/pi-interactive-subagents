@@ -54,6 +54,7 @@ import {
   type ActivityReadResult,
   type SubagentActivityState,
 } from "./activity.ts";
+import { parseCommaList } from "./util.ts";
 
 /** Absolute path to `pi-extension/subagents`. https://github.com/nodejs/node/issues/37845 */
 const SUBAGENTS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -198,10 +199,7 @@ function resolveDenyTools(agentDefs: AgentDefaults): Set<string> {
 
   // deny-tools: explicit list
   if (agentDefs.denyTools) {
-    for (const t of agentDefs.denyTools
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)) {
+    for (const t of parseCommaList(agentDefs.denyTools)) {
       denied.add(t);
     }
   }
@@ -851,10 +849,7 @@ const SUBAGENT_CONTROL_TOOLS = ["caller_ping", "subagent_done"] as const;
  * Returns null when no restriction was requested.
  */
 function resolveAllowedTools(effectiveTools?: string): string[] | null {
-  const requested = (effectiveTools ?? "")
-    .split(",")
-    .map((tool) => tool.trim())
-    .filter(Boolean);
+  const requested = parseCommaList(effectiveTools);
 
   if (requested.length === 0) return null;
 
@@ -903,11 +898,9 @@ function buildPiPromptArgs(params: {
   taskDelivery: "direct" | "artifact";
   taskArg: string;
 }): string[] {
-  const skillPrompts = (params.effectiveSkills ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((skill) => `/skill:${skill}`);
+  const skillPrompts = parseCommaList(params.effectiveSkills).map(
+    (skill) => `/skill:${skill}`,
+  );
 
   const needsSeparator =
     params.taskDelivery === "artifact" && skillPrompts.length > 0;
@@ -1262,7 +1255,9 @@ async function launchSubagent(
     ? "Your FINAL assistant message should summarize what you accomplished."
     : "Your FINAL assistant message (before calling subagent_done or before the user exits) should summarize what you accomplished.";
   const denySet = resolveDenyTools(agentDefs);
-  const identity = agentDefs.body ?? params.systemPrompt ?? null;
+  const identity =
+    [agentDefs.body, params.systemPrompt].filter(Boolean).join("\n\n") ||
+    null;
   const systemPromptMode = agentDefs.systemPromptMode;
   const identityInSystemPrompt = systemPromptMode && identity;
   const roleBlock =
@@ -1560,12 +1555,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
   });
 
   // Tools denied via PI_DENY_TOOLS env var (set by parent agent based on frontmatter)
-  const deniedTools = new Set(
-    (process.env.PI_DENY_TOOLS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const deniedTools = new Set(parseCommaList(process.env.PI_DENY_TOOLS));
 
   const shouldRegister = (name: string) => !deniedTools.has(name);
 

@@ -1,6 +1,5 @@
 ---
 name: Reviewer
-color: orange
 description: Code review specialist. Use it to review a diff, PR, uncommitted changes, or a commit for bugs, security issues, and code quality problems INTRODUCED by the change. Read-only - it never edits files. When calling, tell it WHAT to review (PR number, base branch, commit hash, or 'uncommitted changes') and which files to focus on. Do NOT use it for open-ended exploration or pre-existing issues outside the patch.
 tools: read, bash
 model: modelnexus/qwen/qwen3.8-max

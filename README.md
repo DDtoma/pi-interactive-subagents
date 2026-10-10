@@ -59,6 +59,15 @@ If your shell startup is slow and subagent commands sometimes get dropped before
 export PI_SUBAGENT_SHELL_READY_DELAY_MS=2500
 ```
 
+Pane placement thresholds (default `50` columns / `10` rows): when the parent pane is smaller than the minimum after splitting, the subagent gets a full tab instead of a split.
+
+| Variable                        | Backend | Default |
+| ------------------------------- | ------- | ------- |
+| `PI_SUBAGENT_ZELLIJ_MIN_COLUMNS`| zellij  | `50`    |
+| `PI_SUBAGENT_ZELLIJ_MIN_ROWS`   | zellij  | `10`    |
+| `PI_SUBAGENT_HERDR_MIN_COLUMNS` | herdr   | `50`    |
+| `PI_SUBAGENT_HERDR_MIN_ROWS`    | herdr   | `10`    |
+
 Subagent panes are created without stealing keyboard focus (cmux, tmux, herdr). Launch commands target child surfaces by explicit ID, so focus and command delivery are independent. Note: the `interactive` option controls parent status notifications, not terminal focus.
 
 ## What's Included
