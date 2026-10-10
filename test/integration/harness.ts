@@ -82,7 +82,7 @@ const EXTENSION_SOURCE = join(
 
 /** Model used for integration tests. Override with PI_TEST_MODEL env var. */
 export const TEST_MODEL =
-  process.env.PI_TEST_MODEL ?? "anthropic/claude-haiku-4-5";
+  process.env.PI_TEST_MODEL ?? "modelnexus/z-ai/glm-5.3-flash";
 
 /** Per-test timeout in ms. Override with PI_TEST_TIMEOUT env var. */
 export const PI_TIMEOUT = Number(process.env.PI_TEST_TIMEOUT ?? "120000");

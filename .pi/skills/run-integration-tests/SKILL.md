@@ -76,7 +76,7 @@ Override defaults with environment variables:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PI_TEST_MODEL` | `anthropic/claude-haiku-4-5` | Model for LLM-backed tests |
+| `PI_TEST_MODEL` | `modelnexus/z-ai/glm-5.3-flash` | Model for LLM-backed tests |
 | `PI_TEST_TIMEOUT` | `120000` | Per-test timeout in ms |
 
 ## Step 4: Introspect Sessions
