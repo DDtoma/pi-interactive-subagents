@@ -17,6 +17,7 @@ import {
   rmSync,
   existsSync,
   readFileSync,
+  writeFileSync,
   unlinkSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -223,11 +224,17 @@ export function createTestEnv(backend: MuxBackend): TestEnv {
   const agentsDir = join(dir, ".pi", "agents");
   mkdirSync(agentsDir, { recursive: true });
 
-  // Copy test agent definitions into the project-local agents dir
+  // Copy test agent definitions into the project-local agents dir,
+  // pinning their frontmatter model to TEST_MODEL so runs do not depend on
+  // provider aliases that only exist on the maintainer's machine.
   if (existsSync(TEST_AGENTS_SRC)) {
     for (const file of readdirSync(TEST_AGENTS_SRC)) {
       if (file.endsWith(".md")) {
-        cpSync(join(TEST_AGENTS_SRC, file), join(agentsDir, file));
+        const content = readFileSync(join(TEST_AGENTS_SRC, file), "utf8").replace(
+          /^model:.*$/m,
+          `model: ${TEST_MODEL}`,
+        );
+        writeFileSync(join(agentsDir, file), content);
       }
     }
   }

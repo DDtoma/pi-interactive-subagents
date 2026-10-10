@@ -63,7 +63,14 @@ for (const backend of backends) {
       restoreBackend(prevMux);
     });
 
-    it("keeps focus on the active surface while creating and targeting subagent surfaces", async () => {
+    it("keeps focus on the active surface while creating and targeting subagent surfaces", async (t) => {
+      // Focus helpers only exist for cmux and tmux; herdr 0.9.3 exposes no
+      // focus-pane-by-id operation (only directional neighbor focus), so this
+      // test cannot drive focus there.
+      if (backend !== "cmux" && backend !== "tmux") {
+        t.skip(`focus helpers are not implemented for ${backend}`);
+        return;
+      }
       const anchor = createTrackedSurfaceSplit(env, "focus-anchor", "right");
       await sleep(1000);
 
