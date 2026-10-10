@@ -214,7 +214,7 @@ const ZELLIJ_CURSOR_HEIGHT_WIDTH_RATIO = 4;
 const DEFAULT_ZELLIJ_SUBAGENT_MIN_COLUMNS = 50;
 const DEFAULT_ZELLIJ_SUBAGENT_MIN_ROWS = 10;
 
-export interface ZellijPaneSnapshot {
+interface ZellijPaneSnapshot {
   id: number;
   is_plugin?: boolean;
   is_floating?: boolean;
@@ -226,9 +226,9 @@ export interface ZellijPaneSnapshot {
   is_focused?: boolean;
 }
 
-export type ZellijSplitDirection = "down" | "right";
+type ZellijSplitDirection = "down" | "right";
 
-export type ZellijPlacementPlan =
+type ZellijPlacementPlan =
   | {
       mode: "split";
       anchorPaneId: number;
@@ -258,7 +258,7 @@ function isUsableZellijTiledPane(pane: ZellijPaneSnapshot): boolean {
   );
 }
 
-export function predictZellijSplitDirection(
+function predictZellijSplitDirection(
   pane: ZellijPaneSnapshot,
 ): ZellijSplitDirection | null {
   const columns = pane.pane_columns ?? 0;
@@ -280,7 +280,7 @@ export function predictZellijSplitDirection(
   return null;
 }
 
-export function canSplitZellijPane(
+function canSplitZellijPane(
   pane: ZellijPaneSnapshot,
   minColumns = ZELLIJ_MIN_TERMINAL_WIDTH,
   minRows = ZELLIJ_MIN_TERMINAL_HEIGHT,
@@ -313,7 +313,7 @@ function zellijTabPanesForParent(
   return { parentPane, tabPanes };
 }
 
-export function selectZellijStackPlacement(
+function selectZellijStackPlacement(
   panes: ZellijPaneSnapshot[],
   parentPaneId: number,
 ): ZellijPlacementPlan | null {
@@ -333,7 +333,7 @@ export function selectZellijStackPlacement(
   };
 }
 
-export function selectZellijPlacement(
+function selectZellijPlacement(
   panes: ZellijPaneSnapshot[],
   parentPaneId: number,
   minColumns = DEFAULT_ZELLIJ_SUBAGENT_MIN_COLUMNS,
@@ -592,7 +592,7 @@ function createZellijSurface(name: string): string {
 const DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS = 50;
 const DEFAULT_HERDR_SUBAGENT_MIN_ROWS = 10;
 
-export interface HerdrPaneRect {
+interface HerdrPaneRect {
   height: number;
   width: number;
   x: number;
@@ -603,7 +603,7 @@ export interface HerdrPaneRect {
  * Pick a split direction that leaves both halves usable, mirroring the zellij
  * placement minimums. Returns null when neither direction fits.
  */
-export function selectHerdrSplitDirection(
+function selectHerdrSplitDirection(
   rect: HerdrPaneRect,
   minColumns = DEFAULT_HERDR_SUBAGENT_MIN_COLUMNS,
   minRows = DEFAULT_HERDR_SUBAGENT_MIN_ROWS,
@@ -650,7 +650,7 @@ function readHerdrPaneRect(paneId?: string): HerdrPaneRect | null {
   return null;
 }
 
-export function parseHerdrTabCreatePaneId(output: string): string {
+function parseHerdrTabCreatePaneId(output: string): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(output);
@@ -726,7 +726,7 @@ function createHerdrSurface(name: string): string {
   return createHerdrTabSurface(name);
 }
 
-export function parseHerdrSplitPaneId(output: string): string {
+function parseHerdrSplitPaneId(output: string): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(output);
@@ -795,7 +795,7 @@ function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-export function parseCmuxFocusedSnapshot(
+function parseCmuxFocusedSnapshot(
   value: unknown,
 ): CmuxFocusSnapshot | null {
   if (!value || typeof value !== "object") return null;
@@ -813,7 +813,7 @@ export function parseCmuxFocusedSnapshot(
   return { surfaceRef, paneRef };
 }
 
-export function parseCmuxJson(value: string): unknown | null {
+function parseCmuxJson(value: string): unknown | null {
   try {
     return JSON.parse(value);
   } catch (error) {
@@ -822,7 +822,7 @@ export function parseCmuxJson(value: string): unknown | null {
   }
 }
 
-export function parseCmuxFocusedSnapshotFromJson(
+function parseCmuxFocusedSnapshotFromJson(
   value: string,
 ): CmuxFocusSnapshot | null {
   return parseCmuxFocusedSnapshot(parseCmuxJson(value));
@@ -844,7 +844,7 @@ function parseCmuxCallerSnapshot(value: unknown): CmuxFocusSnapshot | null {
   return { surfaceRef, paneRef };
 }
 
-export function parseCmuxPaneRefForSurface(
+function parseCmuxPaneRefForSurface(
   value: unknown,
   surface: string,
 ): string | null {
@@ -872,7 +872,7 @@ export function parseCmuxPaneRefForSurface(
   return null;
 }
 
-export function parseCmuxPaneRefForSurfaceFromJson(
+function parseCmuxPaneRefForSurfaceFromJson(
   value: string,
   surface: string,
 ): string | null {
@@ -1540,7 +1540,35 @@ function interpretExitSidecar(data: any): PollResult {
   return { reason: "done", exitCode: 0 };
 }
 
-export const __pollForExitTest__ = { interpretExitSidecar };
+/** Unit-test exits: pure parsers and placement planners not used at runtime. */
+export const __test__ = {
+  predictZellijSplitDirection,
+  canSplitZellijPane,
+  selectZellijStackPlacement,
+  selectZellijPlacement,
+  selectHerdrSplitDirection,
+  parseHerdrTabCreatePaneId,
+  parseHerdrSplitPaneId,
+  parseCmuxFocusedSnapshot,
+  parseCmuxFocusedSnapshotFromJson,
+  parseCmuxJson,
+  parseCmuxPaneRefForSurface,
+  parseCmuxPaneRefForSurfaceFromJson,
+  interpretExitSidecar,
+};
+
+/** Read and consume the `.exit` sidecar when present; null when absent. */
+function readExitSidecar(sessionFile: string): PollResult | null {
+  try {
+    const exitFile = `${sessionFile}.exit`;
+    if (!existsSync(exitFile)) return null;
+    const data = JSON.parse(readFileSync(exitFile, "utf8"));
+    rmSync(exitFile, { force: true });
+    return interpretExitSidecar(data);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Poll until the subagent exits. Checks for a `.exit` sidecar file first
@@ -1565,14 +1593,8 @@ export async function pollForExit(
 
     // Fast path: check for .exit sidecar file (written by subagent_done / caller_ping)
     if (options.sessionFile) {
-      try {
-        const exitFile = `${options.sessionFile}.exit`;
-        if (existsSync(exitFile)) {
-          const data = JSON.parse(readFileSync(exitFile, "utf8"));
-          rmSync(exitFile, { force: true });
-          return interpretExitSidecar(data);
-        }
-      } catch {}
+      const sidecar = readExitSidecar(options.sessionFile);
+      if (sidecar) return sidecar;
     }
 
     // Slow path: read terminal screen for sentinel (crash detection)
@@ -1585,14 +1607,8 @@ export async function pollForExit(
     } catch {
       // Surface may have been destroyed — check if .exit file appeared in the meantime
       if (options.sessionFile) {
-        try {
-          const exitFile = `${options.sessionFile}.exit`;
-          if (existsSync(exitFile)) {
-            const data = JSON.parse(readFileSync(exitFile, "utf8"));
-            rmSync(exitFile, { force: true });
-            return interpretExitSidecar(data);
-          }
-        } catch {}
+        const sidecar = readExitSidecar(options.sessionFile);
+        if (sidecar) return sidecar;
       }
     }
 

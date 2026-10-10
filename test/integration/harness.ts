@@ -34,10 +34,11 @@ import {
   closeSurface,
   sendEscape,
   shellEscape,
-  parseCmuxFocusedSnapshotFromJson,
-  parseCmuxPaneRefForSurfaceFromJson,
+  __test__ as cmuxTest,
   type MuxBackend,
 } from "../../pi-extension/subagents/cmux.ts";
+const { parseCmuxFocusedSnapshotFromJson, parseCmuxPaneRefForSurfaceFromJson } =
+  cmuxTest;
 
 // Re-export mux primitives for tests
 export {

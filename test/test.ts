@@ -21,6 +21,9 @@ import {
 
 import {
   shellEscape,
+  __test__ as cmuxTest,
+} from "../pi-extension/subagents/cmux.ts";
+const {
   parseCmuxFocusedSnapshot,
   parseCmuxFocusedSnapshotFromJson,
   parseCmuxJson,
@@ -33,7 +36,8 @@ import {
   parseHerdrSplitPaneId,
   parseHerdrTabCreatePaneId,
   selectHerdrSplitDirection,
-} from "../pi-extension/subagents/cmux.ts";
+  interpretExitSidecar,
+} = cmuxTest;
 import {
   advanceStatusState,
   capStatusLines,
@@ -56,7 +60,6 @@ import {
   shouldAutoExitOnAgentEnd,
   findLatestAssistantError,
 } from "../pi-extension/subagents/subagent-done.ts";
-import { __pollForExitTest__ } from "../pi-extension/subagents/cmux.ts";
 
 // --- Helpers ---
 
@@ -1704,8 +1707,6 @@ describe("subagent-done.ts", () => {
 });
 
 describe("cmux.ts interpretExitSidecar", () => {
-  const { interpretExitSidecar } = __pollForExitTest__;
-
   it("decodes ping payloads", () => {
     assert.deepEqual(
       interpretExitSidecar({

@@ -2,27 +2,27 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const SNAPSHOT_STALLED_AFTER_MS = 60_000;
-export const DEFAULT_STATUS_LINE_LIMIT = 4;
-export const MAX_STATUS_NAME_LENGTH = 72;
-export const MAX_STATUS_LINE_LENGTH = 120;
+const SNAPSHOT_STALLED_AFTER_MS = 60_000;
+const DEFAULT_STATUS_LINE_LIMIT = 4;
+const MAX_STATUS_NAME_LENGTH = 72;
+const MAX_STATUS_LINE_LENGTH = 120;
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_STATUS_CONFIG_PATH = join(PACKAGE_ROOT, "config.json");
 const STATUS_CONFIG_EXAMPLE_PATH = join(PACKAGE_ROOT, "config.json.example");
 
-export type SubagentStatusKind = "starting" | "active" | "waiting" | "stalled";
-export type SubagentStatusSource = "pi";
-export type SubagentStatusTransition = "stalled" | "recovered" | null;
-export type StatusSnapshotState = "unseen" | "present" | "missing" | "invalid" | "wrong-id";
-export type StatusActivityPhase = "starting" | "active" | "waiting" | "done";
+type SubagentStatusKind = "starting" | "active" | "waiting" | "stalled";
+type SubagentStatusSource = "pi";
+type SubagentStatusTransition = "stalled" | "recovered" | null;
+type StatusSnapshotState = "unseen" | "present" | "missing" | "invalid" | "wrong-id";
+type StatusActivityPhase = "starting" | "active" | "waiting" | "done";
 
-export interface StatusConfig {
+interface StatusConfig {
   enabled: boolean;
   lineLimit: number;
 }
 
-export type StatusObservation =
+type StatusObservation =
   | {
       snapshot: "present";
       updatedAt: number;
@@ -78,7 +78,7 @@ export interface StatusSnapshot {
   statusLabel: string | null;
 }
 
-export interface CappedStatusLines {
+interface CappedStatusLines {
   visibleLines: string[];
   overflow: number;
 }
@@ -119,7 +119,7 @@ function truncateText(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength - 1)}…`;
 }
 
-export function normalizeStatusName(name: string): string {
+function normalizeStatusName(name: string): string {
   const collapsed = name.replace(/\s+/g, " ").trim() || "subagent";
   return truncateText(collapsed, MAX_STATUS_NAME_LENGTH);
 }
@@ -187,7 +187,7 @@ export function loadStatusConfig(
   return parseStatusConfig(parsed, sourcePath);
 }
 
-export function formatElapsedDuration(ms: number): string {
+function formatElapsedDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   if (totalSeconds < 60) return `${totalSeconds}s`;
 
