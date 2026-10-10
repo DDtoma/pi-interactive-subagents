@@ -49,12 +49,12 @@ import {
   loadStatusConfig,
 } from "./status.ts";
 import {
+  activityLabel,
   getSubagentActivityFile,
   readSubagentActivityFile,
   type ActivityReadResult,
-  type SubagentActivityState,
 } from "./activity.ts";
-import { parseCommaList } from "./util.ts";
+import { parseCommaList, slugifyName } from "./util.ts";
 
 /** Absolute path to `pi-extension/subagents`. https://github.com/nodejs/node/issues/37845 */
 const SUBAGENTS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -908,14 +908,6 @@ function buildPiPromptArgs(params: {
   return [...(needsSeparator ? [""] : []), ...skillPrompts, params.taskArg];
 }
 
-function activityLabel(activity: SubagentActivityState): string | undefined {
-  if (activity.phase !== "active") return undefined;
-  if (activity.activeScope === "tool") return activity.toolName ?? "tool";
-  if (activity.activeScope === "provider") return "provider";
-  if (activity.activeScope === "streaming") return "streaming";
-  return activity.activeScope;
-}
-
 function observeRunningSubagent(
   running: RunningSubagent,
   observedAt = Date.now(),
@@ -1184,9 +1176,10 @@ async function launchSubagent(
 
   const effectiveModel = params.model ?? agentDefs.model;
   const effectiveTools = params.tools ?? agentDefs.tools;
-  // Validate the allowlist before any pane is created — an invalid list would
-  // exit the child pi at launch and orphan the pane.
-  resolveAllowedTools(effectiveTools);
+  // Validate the allowlist (inside buildPiToolArgs) before any pane is
+  // created — an invalid list would exit the child pi at launch and orphan
+  // the pane.
+  const toolArgs = buildPiToolArgs(effectiveTools);
   const effectiveSkills = params.skills ?? agentDefs.skills;
   const effectiveThinking = agentDefs.thinking;
   const effectiveInteractive = resolveEffectiveInteractive(params, agentDefs);
@@ -1277,7 +1270,6 @@ async function launchSubagent(
 
   // Enforce the tools allowlist: the child only gets the named tools plus
   // the control tools (always added by resolveAllowedTools).
-  const toolArgs = buildPiToolArgs(effectiveTools);
   for (let i = 0; i + 1 < toolArgs.length; i += 2) {
     parts.push(toolArgs[i], shellEscape(toolArgs[i + 1]));
   }
@@ -1307,15 +1299,9 @@ async function launchSubagent(
       .toISOString()
       .replace(/[:.]/g, "-")
       .slice(0, 19);
-    const spSafeName = params.name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
     const syspromptPath = join(
       artifactDir,
-      `context/${spSafeName || "subagent"}-sysprompt-${spTimestamp}.md`,
+      `context/${slugifyName(params.name)}-sysprompt-${spTimestamp}.md`,
     );
     mkdirSync(dirname(syspromptPath), { recursive: true });
     writeFileSync(syspromptPath, identity, "utf8");
@@ -1367,13 +1353,7 @@ async function launchSubagent(
       .toISOString()
       .replace(/[:.]/g, "-")
       .slice(0, 19);
-    const safeName = params.name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "") // strip everything except alphanumeric, spaces, hyphens
-      .replace(/\s+/g, "-") // spaces to hyphens
-      .replace(/-+/g, "-") // collapse multiple hyphens
-      .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
-    const artifactName = `context/${safeName || "subagent"}-${timestamp}.md`;
+    const artifactName = `context/${slugifyName(params.name)}-${timestamp}.md`;
     const artifactPath = join(artifactDir, artifactName);
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, fullTask, "utf8");
@@ -1394,14 +1374,7 @@ async function launchSubagent(
 
   const piCommand = cdPrefix + envPrefix + parts.join(" ");
   const command = `${piCommand}; echo '__SUBAGENT_DONE_'$?'__'`;
-  const launchScriptName = `${
-    (params.name || "subagent")
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "") || "subagent"
-  }-${id}.sh`;
+  const launchScriptName = `${slugifyName(params.name)}-${id}.sh`;
   const launchScriptFile = join(
     artifactDir,
     "subagent-scripts",
@@ -1524,6 +1497,89 @@ async function watchSubagent(
       sessionFile,
     };
   }
+}
+
+/**
+ * Deliver a finished watcher's outcome to the parent session: a help ping
+ * when the subagent asked for it, otherwise the completion/failure
+ * presentation. Shared by the subagent and subagent_resume watchers.
+ */
+function deliverWatcherResult(
+  pi: ExtensionAPI,
+  running: RunningSubagent,
+  result: SubagentResult,
+  options?: { summary?: string },
+): void {
+  updateWidget(); // reflect removal from Map immediately
+
+  const sessionRef = result.sessionFile
+    ? `\n\nSession: ${result.sessionFile}\nResume: pi --session ${result.sessionFile}`
+    : "";
+
+  if (result.ping) {
+    pi.sendMessage(
+      {
+        customType: "subagent_ping",
+        content: `Sub-agent "${result.ping.name}" needs help (${formatElapsed(result.elapsed)}):\n\n${result.ping.message}${sessionRef}`,
+        display: true,
+        details: {
+          name: result.ping.name,
+          message: result.ping.message,
+          ...(running.agent ? { agent: running.agent } : {}),
+          sessionFile: result.sessionFile,
+        },
+      },
+      { triggerTurn: true, deliverAs: "steer" },
+    );
+    return;
+  }
+
+  const presentation = resolveResultPresentation(
+    options?.summary != null ? { ...result, summary: options.summary } : result,
+    running.name,
+  );
+
+  pi.sendMessage(
+    {
+      customType: "subagent_result",
+      content: presentation,
+      display: true,
+      details: {
+        name: running.name,
+        task: running.task,
+        ...(running.agent ? { agent: running.agent } : {}),
+        exitCode: result.exitCode,
+        elapsed: result.elapsed,
+        sessionFile: result.sessionFile,
+        ...(result.errorMessage
+          ? { errorMessage: result.errorMessage }
+          : {}),
+      },
+    },
+    { triggerTurn: true, deliverAs: "steer" },
+  );
+}
+
+/** Deliver a watcher crash (the promise rejected) to the parent session. */
+function deliverWatcherError(
+  pi: ExtensionAPI,
+  running: RunningSubagent,
+  err: any,
+): void {
+  updateWidget();
+  pi.sendMessage(
+    {
+      customType: "subagent_result",
+      content: `Sub-agent "${running.name}" error: ${err?.message ?? String(err)}`,
+      display: true,
+      details: {
+        name: running.name,
+        task: running.task,
+        error: err?.message,
+      },
+    },
+    { triggerTurn: true, deliverAs: "steer" },
+  );
 }
 
 export default function subagentsExtension(pi: ExtensionAPI) {
@@ -1660,70 +1716,8 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 
         // Fire-and-forget: start watching in background
         watchSubagent(running, watcherAbort.signal)
-          .then((result) => {
-            updateWidget(); // reflect removal from Map immediately
-
-            if (result.ping) {
-              // Subagent is requesting help — steer a ping message with session path for resume
-              const sessionRef = `\n\nSession: ${result.sessionFile}\nResume: pi --session ${result.sessionFile}`;
-              pi.sendMessage(
-                {
-                  customType: "subagent_ping",
-                  content: `Sub-agent "${result.ping.name}" needs help (${formatElapsed(result.elapsed)}):\n\n${result.ping.message}${sessionRef}`,
-                  display: true,
-                  details: {
-                    name: result.ping.name,
-                    message: result.ping.message,
-                    agent: running.agent,
-                    sessionFile: result.sessionFile,
-                  },
-                },
-                { triggerTurn: true, deliverAs: "steer" },
-              );
-              return;
-            }
-
-            const presentation = resolveResultPresentation(
-              result,
-              running.name,
-            );
-
-            pi.sendMessage(
-              {
-                customType: "subagent_result",
-                content: presentation,
-                display: true,
-                details: {
-                  name: running.name,
-                  task: running.task,
-                  agent: running.agent,
-                  exitCode: result.exitCode,
-                  elapsed: result.elapsed,
-                  sessionFile: result.sessionFile,
-                  ...(result.errorMessage
-                    ? { errorMessage: result.errorMessage }
-                    : {}),
-                },
-              },
-              { triggerTurn: true, deliverAs: "steer" },
-            );
-          })
-          .catch((err) => {
-            updateWidget();
-            pi.sendMessage(
-              {
-                customType: "subagent_result",
-                content: `Sub-agent "${running.name}" error: ${err?.message ?? String(err)}`,
-                display: true,
-                details: {
-                  name: running.name,
-                  task: running.task,
-                  error: err?.message,
-                },
-              },
-              { triggerTurn: true, deliverAs: "steer" },
-            );
-          });
+          .then((result) => deliverWatcherResult(pi, running, result))
+          .catch((err) => deliverWatcherError(pi, running, err));
 
         // Return immediately
         const resolvedModel = params.model ?? agentDefs.model;
@@ -2070,14 +2064,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
           resumeMsgFile = join(
             artifactDir,
             "subagent-resume",
-            `${
-              name
-                .toLowerCase()
-                .replace(/[^a-z0-9\s-]/g, "")
-                .replace(/\s+/g, "-")
-                .replace(/-+/g, "-")
-                .replace(/^-|-$/g, "") || "resume"
-            }-${msgTimestamp}.md`,
+            `${slugifyName(name, "resume")}-${msgTimestamp}.md`,
           );
           mkdirSync(dirname(resumeMsgFile), { recursive: true });
           writeFileSync(resumeMsgFile, params.message, "utf8");
@@ -2108,14 +2095,7 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         const launchScriptFile = join(
           artifactDir,
           "subagent-scripts",
-          `${
-            name
-              .toLowerCase()
-              .replace(/[^a-z0-9\s-]/g, "")
-              .replace(/\s+/g, "-")
-              .replace(/-+/g, "-")
-              .replace(/^-|-$/g, "") || "resume"
-          }-resume-${Date.now()}.sh`,
+          `${slugifyName(name, "resume")}-resume-${Date.now()}.sh`,
         );
         sendLongCommand(surface, command, {
           scriptPath: launchScriptFile,
@@ -2156,26 +2136,13 @@ export default function subagentsExtension(pi: ExtensionAPI) {
 
         watchSubagent(running, watcherAbort.signal)
           .then((result) => {
-            updateWidget();
-
             if (result.ping) {
-              const sessionRef = `\n\nSession: ${params.sessionPath}\nResume: pi --session ${params.sessionPath}`;
-              pi.sendMessage(
-                {
-                  customType: "subagent_ping",
-                  content: `Sub-agent "${result.ping.name}" needs help (${formatElapsed(result.elapsed)}):\n\n${result.ping.message}${sessionRef}`,
-                  display: true,
-                  details: {
-                    name: result.ping.name,
-                    message: result.ping.message,
-                    sessionFile: params.sessionPath,
-                  },
-                },
-                { triggerTurn: true, deliverAs: "steer" },
-              );
+              deliverWatcherResult(pi, running, result);
               return;
             }
 
+            // Only messages appended after the resume count — the session's
+            // pre-resume history must not leak into the summary.
             const allEntries = getNewEntries(
               params.sessionPath,
               entryCountBefore,
@@ -2187,42 +2154,9 @@ export default function subagentsExtension(pi: ExtensionAPI) {
                 : result.exitCode === 0
                   ? "Resumed session exited without new output"
                   : `Resumed session exited with code ${result.exitCode}`);
-            const presentation = resolveResultPresentation(
-              { ...result, summary, sessionFile: params.sessionPath },
-              name,
-            );
-
-            pi.sendMessage(
-              {
-                customType: "subagent_result",
-                content: presentation,
-                display: true,
-                details: {
-                  name,
-                  task: params.message ?? "resumed session",
-                  exitCode: result.exitCode,
-                  elapsed: result.elapsed,
-                  sessionFile: params.sessionPath,
-                  ...(result.errorMessage
-                    ? { errorMessage: result.errorMessage }
-                    : {}),
-                },
-              },
-              { triggerTurn: true, deliverAs: "steer" },
-            );
+            deliverWatcherResult(pi, running, result, { summary });
           })
-          .catch((err) => {
-            updateWidget();
-            pi.sendMessage(
-              {
-                customType: "subagent_result",
-                content: `Resume error: ${err?.message ?? String(err)}`,
-                display: true,
-                details: { name, error: err?.message },
-              },
-              { triggerTurn: true, deliverAs: "steer" },
-            );
-          });
+          .catch((err) => deliverWatcherError(pi, running, err));
 
         return {
           content: [{ type: "text", text: `Session "${name}" resumed.` }],

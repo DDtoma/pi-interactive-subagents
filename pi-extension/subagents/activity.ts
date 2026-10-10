@@ -51,6 +51,17 @@ export type ActivityReadResult =
   | { ok: true; activity: SubagentActivityState }
   | { ok: false; reason: "missing" | "invalid" | "wrong-id"; error?: string };
 
+/** Short human label for what an active subagent is doing (widget/status display). */
+export function activityLabel(
+  activity: SubagentActivityState,
+): string | undefined {
+  if (activity.phase !== "active") return undefined;
+  if (activity.activeScope === "tool") return activity.toolName ?? "tool";
+  if (activity.activeScope === "provider") return "provider";
+  if (activity.activeScope === "streaming") return "streaming";
+  return activity.activeScope;
+}
+
 export type SubagentShutdownReason = "quit" | "reload" | "new" | "resume" | "fork";
 
 export interface SubagentActivityRecorder {
