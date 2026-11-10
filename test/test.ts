@@ -1126,7 +1126,7 @@ describe("subagent discovery", () => {
       const defs = testApi.loadAgentDefaults("reviewer");
       assert.ok(defs, "expected bundled reviewer to be discoverable");
       assert.equal(defs.name, "Reviewer");
-      assert.equal(defs.model, "modelnexus/qwen/qwen3.8-max");
+      assert.equal(defs.model, "modelnexus/z-ai/glm-5.3");
       assert.equal(defs.thinking, "high");
       assert.equal(defs.tools, "read, bash");
       assert.equal(defs.autoExit, true);
@@ -2423,6 +2423,36 @@ describe("subagent status renderer", () => {
       );
     }
     assert.match(output, /\+2 more running\./);
+  });
+
+  it("uses the host-provided keybinding hint", () => {
+    const { api, registeredMessageRenderers } = createMockExtensionApi();
+    (subagentsModule as any).default(api);
+
+    const rendererEntry = registeredMessageRenderers.find(
+      (entry) => entry.name === "subagent_status",
+    );
+    assert.ok(rendererEntry);
+
+    const rendered = rendererEntry.renderer(
+      {
+        customType: "subagent_status",
+        content: "Subagent status:",
+        details: { lines: ["Worker running 1m."], overflow: 0 },
+      },
+      {
+        expanded: false,
+        keyHint(keybinding: string, description: string) {
+          return `${keybinding} ${description}`;
+        },
+      },
+      createTheme(),
+    );
+
+    assert.match(
+      rendered.render(80).join("\n"),
+      /app\.tools\.expand to expand/,
+    );
   });
 
   it("stays within narrow widths", () => {

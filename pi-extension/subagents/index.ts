@@ -2,7 +2,6 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { Box, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { dirname, join } from "node:path";
@@ -1772,7 +1771,10 @@ export default function subagentsExtension(pi: ExtensionAPI) {
             }
           }
           contentLines.push(
-            theme.fg("muted", keyHint("app.tools.expand", "to expand")),
+            theme.fg(
+              "muted",
+              options.keyHint("app.tools.expand", "to expand"),
+            ),
           );
         }
 
@@ -1808,7 +1810,10 @@ export default function subagentsExtension(pi: ExtensionAPI) {
         }
         if (!options.expanded) {
           contentLines.push(
-            theme.fg("muted", keyHint("app.tools.expand", "to expand")),
+            theme.fg(
+              "muted",
+              options.keyHint("app.tools.expand", "to expand"),
+            ),
           );
         }
 
@@ -1853,7 +1858,10 @@ export default function subagentsExtension(pi: ExtensionAPI) {
             .slice(0, width - 10);
           contentLines.push(theme.fg("dim", preview));
           contentLines.push(
-            theme.fg("muted", keyHint("app.tools.expand", "to expand")),
+            theme.fg(
+              "muted",
+              options.keyHint("app.tools.expand", "to expand"),
+            ),
           );
         }
 
